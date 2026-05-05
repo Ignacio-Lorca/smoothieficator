@@ -44,6 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let transportHeartbeatTimer = null;
   let suppressTransportPublish = false;
   let isConductor = false;
+  let isApplyingRemoteSongSwitch = false;
+  let missingRemoteSongId = "";
+  let lastTakeoverAttemptMs = 0;
   let transportState = {
     songId: "",
     isPlaying: false,
@@ -132,6 +135,57 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${currentTitle}::${currentArtist}`;
   }
 
+  function getCurrentSongTransportId() {
+    if (typeof window.getCurrentSongTransportId === "function") {
+      const stableId = window.getCurrentSongTransportId();
+      if (stableId) return stableId;
+    }
+    return getCurrentSongKey();
+  }
+
+  function setMissingRemoteSongStatus(songId) {
+    if (!songId || songId === missingRemoteSongId) return;
+    missingRemoteSongId = songId;
+    if (
+      window.songStorage &&
+      typeof window.songStorage.setMissingSongSyncStatus === "function"
+    ) {
+      window.songStorage.setMissingSongSyncStatus(songId);
+      return;
+    }
+    if (
+      window.songStorage &&
+      typeof window.songStorage.setTransportSyncStatus === "function"
+    ) {
+      window.songStorage.setTransportSyncStatus("Sync: Missing remote song locally", "warning");
+    }
+  }
+
+  async function ensureRemoteSongLoaded(remoteSongId) {
+    if (!remoteSongId || isConductor) return true;
+    const currentSongId = getCurrentSongTransportId();
+    if (currentSongId === remoteSongId) return true;
+    if (isApplyingRemoteSongSwitch) return false;
+    if (typeof window.openSongByTransportId !== "function") return false;
+
+    isApplyingRemoteSongSwitch = true;
+    suppressTransportPublish = true;
+    try {
+      const opened = window.openSongByTransportId(remoteSongId);
+      if (!opened) {
+        setMissingRemoteSongStatus(remoteSongId);
+        return false;
+      }
+
+      missingRemoteSongId = "";
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return getCurrentSongTransportId() === remoteSongId;
+    } finally {
+      suppressTransportPublish = false;
+      isApplyingRemoteSongSwitch = false;
+    }
+  }
+
   function speedPxPerMs(speedValue) {
     return (0.2 + (speedValue - 1) * 0.2) / 50;
   }
@@ -157,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nowIso = new Date().toISOString();
     transportState = {
       ...transportState,
-      songId: getCurrentSongKey(),
+      songId: getCurrentSongTransportId(),
       isPlaying: isScrolling,
       speed: parseInt(scrollSpeedInput.value, 10),
       positionPx: timelinePositionPx,
@@ -189,16 +243,54 @@ document.addEventListener("DOMContentLoaded", () => {
     return false;
   }
 
-  function applyRemoteTransport(remote) {
-    if (!remote || !remote.updatedAt) return;
-    if (remote.songId && getCurrentSongKey() && remote.songId !== getCurrentSongKey()) {
-      return;
+  async function attemptTakeoverAndPublish(actionType, overrides = {}) {
+    if (suppressTransportPublish) return false;
+
+    const nowMs = Date.now();
+    if (nowMs - lastTakeoverAttemptMs < 150) return false;
+    lastTakeoverAttemptMs = nowMs;
+
+    if (
+      window.songStorage &&
+      typeof window.songStorage.setTransportControlStatus === "function"
+    ) {
+      window.songStorage.setTransportControlStatus("taking");
     }
 
-    const currentTs = Date.parse(transportState.updatedAt || "");
-    const remoteTs = Date.parse(remote.updatedAt || "");
-    if (Number.isFinite(currentTs) && Number.isFinite(remoteTs) && remoteTs <= currentTs) {
-      return;
+    const ok = await publishTransportState({
+      requestTakeover: true,
+      actionType,
+      ...overrides,
+    });
+
+    if (
+      window.songStorage &&
+      typeof window.songStorage.setTransportControlStatus === "function"
+    ) {
+      window.songStorage.setTransportControlStatus(ok ? "acquired" : "following");
+    }
+    return ok;
+  }
+
+  async function applyRemoteTransport(remote) {
+    if (!remote || !remote.updatedAt) return;
+    if (remote.songId) {
+      const loaded = await ensureRemoteSongLoaded(remote.songId);
+      if (!loaded) return;
+    }
+
+    const localVersion = Number(transportState.version || 0);
+    const remoteVersion = Number(remote.version || 0);
+    if (localVersion > 0 && remoteVersion > 0) {
+      if (remoteVersion <= localVersion) {
+        return;
+      }
+    } else {
+      const currentTs = Date.parse(transportState.updatedAt || "");
+      const remoteTs = Date.parse(remote.updatedAt || "");
+      if (Number.isFinite(currentTs) && Number.isFinite(remoteTs) && remoteTs < currentTs) {
+        return;
+      }
     }
 
     transportState = { ...transportState, ...remote };
@@ -235,7 +327,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const remote = await window.songStorage.loadTransportState();
     if (remote) {
-      applyRemoteTransport(remote);
+      await applyRemoteTransport(remote);
     }
   }
 
@@ -252,7 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (transportHeartbeatTimer) clearInterval(transportHeartbeatTimer);
     transportHeartbeatTimer = setInterval(() => {
       if (!isConductor || !isScrolling) return;
-      publishTransportState({ isPlaying: true }).catch((error) => {
+      publishTransportState({ isPlaying: true, actionType: "heartbeat" }).catch((error) => {
         console.warn("Transport heartbeat failed", error);
       });
     }, HEARTBEAT_MS);
@@ -287,8 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const reachedEnd =
-      timelinePositionPx + teleprompter.clientHeight >= maxTimelinePosition() - 10;
+    const reachedEnd = timelinePositionPx >= maxTimelinePosition() - 10;
     if (reachedEnd && isScrolling) {
       stopScrolling();
     }
@@ -327,11 +418,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Save scroll speed for current song
     saveScrollSpeedForCurrentSong();
-    if (isConductor) {
-      publishTransportState().catch((error) => {
-        console.warn("Failed to publish speed update", error);
-      });
-    }
+    attemptTakeoverAndPublish("speed").catch((error) => {
+      console.warn("Failed to publish speed update", error);
+    });
   });
 
   // Keyboard controls
@@ -342,15 +431,13 @@ document.addEventListener("DOMContentLoaded", () => {
     resetScroll();
     loadSavedSongs(); // Update the saved songs array and current index
     loadZoomLevelForCurrentSong(); // Load the zoom level for the song
-    if (isConductor) {
-      publishTransportState({
-        songId: getCurrentSongKey(),
-        isPlaying: false,
-        positionPx: 0,
-      }).catch((error) => {
-        console.warn("Failed to publish song reset", error);
-      });
-    }
+    attemptTakeoverAndPublish("songSelect", {
+      songId: getCurrentSongTransportId(),
+      isPlaying: false,
+      positionPx: 0,
+    }).catch((error) => {
+      console.warn("Failed to publish song reset", error);
+    });
   });
 
   startVisualLoop();
@@ -382,14 +469,14 @@ document.addEventListener("DOMContentLoaded", () => {
       positionPx: timelinePositionPx,
       updatedAt: new Date().toISOString(),
       sourceId: clientSourceId,
-      songId: getCurrentSongKey(),
+      songId: getCurrentSongTransportId(),
     };
 
     // Show stop button, hide start button
     startScrollBtn.classList.add("hidden");
     stopScrollBtn.classList.remove("hidden");
 
-    publishTransportState({ isPlaying: true })
+    attemptTakeoverAndPublish("play", { isPlaying: true })
       .then((ok) => {
         if (!ok) {
           // Another browser is the conductor; stay follower and wait for sync.
@@ -414,17 +501,15 @@ document.addEventListener("DOMContentLoaded", () => {
       positionPx: timelinePositionPx,
       updatedAt: new Date().toISOString(),
       sourceId: clientSourceId,
-      songId: getCurrentSongKey(),
+      songId: getCurrentSongTransportId(),
     };
 
     // Show start button, hide stop button
     startScrollBtn.classList.remove("hidden");
     stopScrollBtn.classList.add("hidden");
-    if (isConductor) {
-      publishTransportState({ isPlaying: false }).catch((error) => {
-        console.warn("Failed to publish pause state", error);
-      });
-    }
+    attemptTakeoverAndPublish("pause", { isPlaying: false }).catch((error) => {
+      console.warn("Failed to publish pause state", error);
+    });
   }
 
   function resetScroll() {
@@ -437,14 +522,12 @@ document.addEventListener("DOMContentLoaded", () => {
       ...transportState,
       positionPx: 0,
       updatedAt: new Date().toISOString(),
-      songId: getCurrentSongKey(),
+      songId: getCurrentSongTransportId(),
       sourceId: clientSourceId,
     };
-    if (isConductor) {
-      publishTransportState({ isPlaying: false, positionPx: 0 }).catch((error) => {
-        console.warn("Failed to publish reset state", error);
-      });
-    }
+    attemptTakeoverAndPublish("seek", { isPlaying: false, positionPx: 0 }).catch((error) => {
+      console.warn("Failed to publish reset state", error);
+    });
   }
 
   // Update zoom level and apply to song content
@@ -1052,22 +1135,20 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         // Scroll up manually
         setTimelinePosition(timelinePositionPx - 40);
-        if (isConductor) {
-          publishTransportState({ isPlaying: false, positionPx: timelinePositionPx }).catch(
-            () => {}
-          );
-        }
+        attemptTakeoverAndPublish("seek", {
+          isPlaying: false,
+          positionPx: timelinePositionPx,
+        }).catch(() => {});
         break;
 
       case "ArrowDown":
         e.preventDefault();
         // Scroll down manually
         setTimelinePosition(timelinePositionPx + 40);
-        if (isConductor) {
-          publishTransportState({ isPlaying: false, positionPx: timelinePositionPx }).catch(
-            () => {}
-          );
-        }
+        attemptTakeoverAndPublish("seek", {
+          isPlaying: false,
+          positionPx: timelinePositionPx,
+        }).catch(() => {});
         break;
 
       case "Home":

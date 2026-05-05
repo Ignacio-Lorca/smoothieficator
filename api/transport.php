@@ -31,6 +31,7 @@ function default_state(): array
         "conductorId" => "",
         "conductorUntil" => "",
         "lastHeartbeatAt" => "",
+        "lastTakeoverAt" => "",
         "serverNow" => gmdate("c"),
     ];
 }
@@ -66,6 +67,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $sourceId = (string)($payload["sourceId"] ?? "");
     $releaseLease = (bool)($payload["releaseLease"] ?? false);
+    $requestTakeover = (bool)($payload["requestTakeover"] ?? false);
+    $actionType = (string)($payload["actionType"] ?? "");
+    $takeoverCooldownMs = 450;
 
     $leaseMs = (int)($payload["leaseMs"] ?? 1500);
     if ($leaseMs < 500) {
@@ -100,13 +104,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $leaseActive = $currentConductorId !== ""
         && $currentConductorUntilTs !== false
         && $currentConductorUntilTs >= $nowTs;
+    $lastTakeoverAt = (string)($current["lastTakeoverAt"] ?? "");
+    $lastTakeoverAtTs = strtotime($lastTakeoverAt ?: "");
+    $withinTakeoverCooldown = $lastTakeoverAtTs !== false
+        && ($nowTs - $lastTakeoverAtTs) * 1000 < $takeoverCooldownMs;
 
     if ($releaseLease && $sourceId !== "" && $sourceId === $currentConductorId) {
         $currentConductorId = "";
         $leaseActive = false;
     }
 
-    if ($leaseActive && $sourceId !== $currentConductorId) {
+    $isCompetingWriter = $leaseActive && $sourceId !== $currentConductorId;
+    if ($isCompetingWriter && !$requestTakeover) {
         flock($handle, LOCK_UN);
         fclose($handle);
         respond(409, [
@@ -116,6 +125,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "serverNow" => $nowIso,
             "version" => (int)($current["version"] ?? 0),
         ]);
+    }
+
+    if ($isCompetingWriter && $requestTakeover && $withinTakeoverCooldown) {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        respond(409, [
+            "error" => "Takeover cooldown active",
+            "conductorId" => $currentConductorId,
+            "conductorUntil" => $currentConductorUntil,
+            "serverNow" => $nowIso,
+            "version" => (int)($current["version"] ?? 0),
+        ]);
+    }
+
+    if ($isCompetingWriter && $requestTakeover) {
+        $currentConductorId = $sourceId;
+        $lastTakeoverAt = $nowIso;
     }
 
     if ($sourceId !== "") {
@@ -137,6 +163,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         "conductorId" => $currentConductorId,
         "conductorUntil" => $conductorUntilIso,
         "lastHeartbeatAt" => $nowIso,
+        "lastTakeoverAt" => $lastTakeoverAt,
+        "actionType" => $actionType,
         "serverNow" => $nowIso,
     ];
 

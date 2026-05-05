@@ -225,6 +225,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Store current song reference for scroll speed updates
     window.currentDisplayedSong = song;
+    if (song && song.__songId) {
+      window.currentDisplayedSongId = song.__songId;
+    } else {
+      const entries = Object.entries(localSongs);
+      const match = entries.find(
+        ([id, savedSong]) => savedSong.title === song.title && savedSong.artist === song.artist
+      );
+      window.currentDisplayedSongId = match ? match[0] : null;
+    }
 
     // Dispatch event that song has loaded
     window.dispatchEvent(new CustomEvent("songLoaded"));
@@ -276,6 +285,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Display the song
     displaySong(songData);
 
+    return true;
+  };
+
+  window.getCurrentSongTransportId = function () {
+    return window.currentDisplayedSongId || "";
+  };
+
+  window.openSongByTransportId = function (transportSongId) {
+    if (!transportSongId) return false;
+
+    const entries = Object.entries(localSongs);
+    let match = entries.find(([id]) => id === transportSongId);
+
+    // Backward compatibility for legacy title::artist transport IDs.
+    if (!match && transportSongId.includes("::")) {
+      const [title, artist] = transportSongId.split("::");
+      match = entries.find(
+        ([_, song]) => song.title === (title || "").trim() && song.artist === (artist || "").trim()
+      );
+    }
+
+    if (!match) return false;
+    const [id, song] = match;
+    displaySong({ ...song, __songId: id });
     return true;
   };
 

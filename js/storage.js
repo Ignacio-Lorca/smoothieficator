@@ -58,6 +58,25 @@
     statusElement.classList.remove("hidden");
   }
 
+  function setMissingSongSyncStatus(songId) {
+    const shortId = (songId || "").toString().slice(0, 20);
+    setTransportSyncStatus(`Sync: Song not found (${shortId})`, "warning");
+  }
+
+  function setTransportControlStatus(state) {
+    if (state === "taking") {
+      setTransportSyncStatus("Sync: Taking control...", "saving");
+      return;
+    }
+    if (state === "acquired") {
+      setTransportSyncStatus("Sync: Control acquired", "ok");
+      return;
+    }
+    if (state === "following") {
+      setTransportSyncStatus("Sync: Following controller", "warning");
+    }
+  }
+
   async function loadSongs() {
     const { controller, timer } = withTimeout(REQUEST_TIMEOUT_MS);
 
@@ -205,5 +224,7 @@
     loadTransportState,
     saveTransportState,
     setTransportSyncStatus,
+    setMissingSongSyncStatus,
+    setTransportControlStatus,
   };
 })();
