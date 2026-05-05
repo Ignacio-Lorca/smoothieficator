@@ -2,6 +2,8 @@
 (function () {
   const REMOTE_ENDPOINT =
     window.SMOOTHIEFICATOR_STORAGE_ENDPOINT || "/api/songs.php";
+  const TRANSPORT_ENDPOINT =
+    window.SMOOTHIEFICATOR_TRANSPORT_ENDPOINT || "/api/transport.php";
   const LOCAL_CACHE_KEY = "savedSongs";
   const REQUEST_TIMEOUT_MS = 8000;
 
@@ -40,6 +42,15 @@
 
   function setSyncStatus(message, type) {
     const statusElement = document.getElementById("sync-status");
+    if (!statusElement) return;
+
+    statusElement.textContent = message;
+    statusElement.dataset.state = type || "idle";
+    statusElement.classList.remove("hidden");
+  }
+
+  function setTransportSyncStatus(message, type) {
+    const statusElement = document.getElementById("transport-sync-status");
     if (!statusElement) return;
 
     statusElement.textContent = message;
@@ -115,11 +126,69 @@
     }
   }
 
+  async function loadTransportState() {
+    const { controller, timer } = withTimeout(REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(TRANSPORT_ENDPOINT, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Transport load failed (${response.status})`);
+      }
+
+      const payload = await response.json();
+      setTransportSyncStatus("Sync: Live", "ok");
+      return payload;
+    } catch (error) {
+      console.warn("Transport load failed.", error);
+      setTransportSyncStatus("Sync: Reconnecting", "warning");
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function saveTransportState(state) {
+    const { controller, timer } = withTimeout(REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(TRANSPORT_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(state || {}),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Transport save failed (${response.status})`);
+      }
+
+      setTransportSyncStatus("Sync: Live", "ok");
+      return true;
+    } catch (error) {
+      console.warn("Transport save failed.", error);
+      setTransportSyncStatus("Sync: Lagging", "error");
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   window.songStorage = {
     loadSongs,
     saveSongs,
     readLocalCache,
     writeLocalCache,
     setSyncStatus,
+    loadTransportState,
+    saveTransportState,
+    setTransportSyncStatus,
   };
 })();

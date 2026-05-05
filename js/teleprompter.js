@@ -32,6 +32,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Zoom state
   let currentZoomLevel = 100; // Default zoom level in percentage
+  const clientSourceId = `client-${Math.random().toString(36).slice(2, 10)}`;
+  const TRANSPORT_POLL_MS = 400;
+  const REMOTE_APPLY_EPSILON_PX = 8;
+  let visualRafId = null;
+  let transportPollTimer = null;
+  let suppressTransportPublish = false;
+  let transportState = {
+    songId: "",
+    isPlaying: false,
+    speed: parseInt(scrollSpeedInput?.value || "8", 10),
+    positionPx: 0,
+    updatedAt: new Date(0).toISOString(),
+    sourceId: "",
+    version: 0,
+  };
 
   function getStoredSongs() {
     if (window.songStorage && typeof window.songStorage.readLocalCache === "function") {
@@ -46,6 +61,131 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     localStorage.setItem("savedSongs", JSON.stringify(songs));
+  }
+
+  function getCurrentSongKey() {
+    const currentTitle = document.querySelector(".song-header h2")?.textContent;
+    const currentArtist = document
+      .querySelector(".song-header h3")
+      ?.textContent?.replace(/by\s+/i, "")
+      .trim();
+    if (!currentTitle || !currentArtist) return "";
+    return `${currentTitle}::${currentArtist}`;
+  }
+
+  function speedPxPerMs(speedValue) {
+    return (0.2 + (speedValue - 1) * 0.2) / 50;
+  }
+
+  function computeRemoteNowPosition(state, nowMs) {
+    if (!state) return teleprompter.scrollTop;
+    const updatedAtMs = Date.parse(state.updatedAt || "");
+    const safeUpdatedAt = Number.isFinite(updatedAtMs) ? updatedAtMs : nowMs;
+    if (!state.isPlaying) return state.positionPx || 0;
+    const elapsed = Math.max(0, nowMs - safeUpdatedAt);
+    return (state.positionPx || 0) + elapsed * speedPxPerMs(state.speed || 8);
+  }
+
+  async function publishTransportState(overrides = {}) {
+    if (
+      suppressTransportPublish ||
+      !window.songStorage ||
+      typeof window.songStorage.saveTransportState !== "function"
+    ) {
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    transportState = {
+      ...transportState,
+      songId: getCurrentSongKey(),
+      isPlaying,
+      speed: parseInt(scrollSpeedInput.value, 10),
+      positionPx: teleprompter.scrollTop,
+      updatedAt: nowIso,
+      sourceId: clientSourceId,
+      ...overrides,
+      updatedAt: nowIso,
+      sourceId: clientSourceId,
+    };
+
+    await window.songStorage.saveTransportState(transportState);
+  }
+
+  function applyRemoteTransport(remote) {
+    if (!remote || !remote.updatedAt) return;
+    if (remote.sourceId === clientSourceId) return;
+    if (remote.songId && getCurrentSongKey() && remote.songId !== getCurrentSongKey()) {
+      return;
+    }
+
+    const currentTs = Date.parse(transportState.updatedAt || "");
+    const remoteTs = Date.parse(remote.updatedAt || "");
+    if (Number.isFinite(currentTs) && Number.isFinite(remoteTs) && remoteTs <= currentTs) {
+      return;
+    }
+
+    transportState = { ...transportState, ...remote };
+    const remoteSpeed = parseInt(remote.speed || scrollSpeedInput.value, 10);
+    if (parseInt(scrollSpeedInput.value, 10) !== remoteSpeed) {
+      suppressTransportPublish = true;
+      scrollSpeedInput.value = remoteSpeed;
+      scrollSpeedInput.dispatchEvent(new Event("input"));
+      suppressTransportPublish = false;
+    }
+
+    const remotePos = computeRemoteNowPosition(remote, Date.now());
+    if (Math.abs(teleprompter.scrollTop - remotePos) > REMOTE_APPLY_EPSILON_PX) {
+      teleprompter.scrollTop = Math.max(0, remotePos);
+    }
+
+    isScrolling = !!remote.isPlaying;
+    startScrollBtn.classList.toggle("hidden", isScrolling);
+    stopScrollBtn.classList.toggle("hidden", !isScrolling);
+  }
+
+  async function pollTransportState() {
+    if (
+      !window.songStorage ||
+      typeof window.songStorage.loadTransportState !== "function"
+    ) {
+      return;
+    }
+    const remote = await window.songStorage.loadTransportState();
+    if (remote) {
+      applyRemoteTransport(remote);
+    }
+  }
+
+  function startTransportPolling() {
+    if (transportPollTimer) clearInterval(transportPollTimer);
+    transportPollTimer = setInterval(() => {
+      pollTransportState().catch((error) => {
+        console.warn("Transport poll failed", error);
+      });
+    }, TRANSPORT_POLL_MS);
+  }
+
+  function renderTransportPosition() {
+    if (isScrolling) {
+      transportState.speed = parseInt(scrollSpeedInput.value, 10);
+      const nowPosition = computeRemoteNowPosition(transportState, Date.now());
+      teleprompter.scrollTop = Math.max(0, nowPosition);
+    }
+
+    const reachedEnd =
+      teleprompter.scrollTop + teleprompter.clientHeight >=
+      teleprompter.scrollHeight - 10;
+    if (reachedEnd && isScrolling) {
+      stopScrolling();
+    }
+
+    visualRafId = requestAnimationFrame(renderTransportPosition);
+  }
+
+  function startVisualLoop() {
+    if (visualRafId) cancelAnimationFrame(visualRafId);
+    visualRafId = requestAnimationFrame(renderTransportPosition);
   }
 
   // Initialize scroll controls
@@ -72,13 +212,11 @@ document.addEventListener("DOMContentLoaded", () => {
       speedValueDisplay.textContent = scrollSpeedInput.value;
     }
 
-    if (isScrolling) {
-      stopScrolling();
-      startScrolling();
-    }
-
     // Save scroll speed for current song
     saveScrollSpeedForCurrentSong();
+    publishTransportState().catch((error) => {
+      console.warn("Failed to publish speed update", error);
+    });
   });
 
   // Keyboard controls
@@ -89,51 +227,43 @@ document.addEventListener("DOMContentLoaded", () => {
     resetScroll();
     loadSavedSongs(); // Update the saved songs array and current index
     loadZoomLevelForCurrentSong(); // Load the zoom level for the song
+    publishTransportState({
+      songId: getCurrentSongKey(),
+      isPlaying: false,
+      positionPx: 0,
+    }).catch((error) => {
+      console.warn("Failed to publish song reset", error);
+    });
+  });
+
+  startVisualLoop();
+  startTransportPolling();
+  pollTransportState().catch((error) => {
+    console.warn("Initial transport fetch failed", error);
   });
 
   function startScrolling() {
     // Don't allow scrolling in edit mode
     if (isEditMode || isScrolling) return;
 
-    const speed = calculateScrollSpeed();
     isScrolling = true;
-    scrollAccumulator = 0; // Reset accumulator when starting
+    transportState = {
+      ...transportState,
+      isPlaying: true,
+      speed: parseInt(scrollSpeedInput.value, 10),
+      positionPx: teleprompter.scrollTop,
+      updatedAt: new Date().toISOString(),
+      sourceId: clientSourceId,
+      songId: getCurrentSongKey(),
+    };
 
     // Show stop button, hide start button
     startScrollBtn.classList.add("hidden");
     stopScrollBtn.classList.remove("hidden");
 
-    // Start scrolling at the calculated speed
-    scrollInterval = setInterval(() => {
-      // Add the fractional speed to the accumulator
-      scrollAccumulator += speed;
-
-      // When the accumulator reaches at least 1, scroll by the integer part
-      if (scrollAccumulator >= 1) {
-        const scrollPixels = Math.floor(scrollAccumulator);
-        teleprompter.scrollBy(0, scrollPixels);
-        scrollAccumulator -= scrollPixels; // Keep the remainder for next time
-      }
-
-      // If we've reached the end, stop scrolling
-      // Check if the last content element is at the bottom of the viewport
-      const lastElement = songContent.lastElementChild;
-      if (lastElement) {
-        const lastElementBottom = lastElement.getBoundingClientRect().bottom;
-        const teleprompterBottom = teleprompter.getBoundingClientRect().bottom;
-
-        // Stop when the bottom of the last element is at or near the bottom of the teleprompter
-        if (lastElementBottom <= teleprompterBottom + 5) {
-          stopScrolling();
-        }
-      } else if (
-        teleprompter.scrollTop + teleprompter.clientHeight >=
-        teleprompter.scrollHeight - 10
-      ) {
-        // Fallback to the original check if there's no last element
-        stopScrolling();
-      }
-    }, 50); // Update every 50ms for smooth scrolling
+    publishTransportState({ isPlaying: true }).catch((error) => {
+      console.warn("Failed to publish play state", error);
+    });
   }
 
   function stopScrolling() {
@@ -141,10 +271,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     isScrolling = false;
     clearInterval(scrollInterval);
+    transportState = {
+      ...transportState,
+      isPlaying: false,
+      speed: parseInt(scrollSpeedInput.value, 10),
+      positionPx: teleprompter.scrollTop,
+      updatedAt: new Date().toISOString(),
+      sourceId: clientSourceId,
+      songId: getCurrentSongKey(),
+    };
 
     // Show start button, hide stop button
     startScrollBtn.classList.remove("hidden");
     stopScrollBtn.classList.add("hidden");
+    publishTransportState({ isPlaying: false }).catch((error) => {
+      console.warn("Failed to publish pause state", error);
+    });
   }
 
   function resetScroll() {
@@ -153,6 +295,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Scroll to top
     teleprompter.scrollTop = 0;
+    transportState = {
+      ...transportState,
+      positionPx: 0,
+      updatedAt: new Date().toISOString(),
+      songId: getCurrentSongKey(),
+      sourceId: clientSourceId,
+    };
+    publishTransportState({ isPlaying: false, positionPx: 0 }).catch((error) => {
+      console.warn("Failed to publish reset state", error);
+    });
   }
 
   function calculateScrollSpeed() {
@@ -772,12 +924,14 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         // Scroll up manually
         teleprompter.scrollBy(0, -40);
+        publishTransportState({ isPlaying: false }).catch(() => {});
         break;
 
       case "ArrowDown":
         e.preventDefault();
         // Scroll down manually
         teleprompter.scrollBy(0, 40);
+        publishTransportState({ isPlaying: false }).catch(() => {});
         break;
 
       case "Home":

@@ -202,6 +202,9 @@
           </button>
         </div>
         <div id="sync-status" class="sync-status hidden">Syncing...</div>
+        <div id="transport-sync-status" class="sync-status hidden">
+          Sync: Reconnecting
+        </div>
       </div>
 
       <!-- Mobile Menu for small screens -->
@@ -355,6 +358,12 @@
         </div>
       </div>
     </div>
+    <script>
+      window.SMOOTHIEFICATOR_STORAGE_ENDPOINT =
+        "https://smoothieficator.nachosavage.com/api/songs.php";
+      window.SMOOTHIEFICATOR_TRANSPORT_ENDPOINT =
+        "https://smoothieficator.nachosavage.com/api/transport.php";
+    </script>
     <script src="js/storage.js"></script>
     <script src="js/scraper.js"></script>
     <script src="js/teleprompter.js"></script>
