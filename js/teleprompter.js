@@ -33,17 +33,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // Zoom state
   let currentZoomLevel = 100; // Default zoom level in percentage
   const clientSourceId = `client-${Math.random().toString(36).slice(2, 10)}`;
-  const TRANSPORT_POLL_MS = 350;
-  const HEARTBEAT_MS = 350;
+  const TRANSPORT_POLL_MS = 700;
+  const HEARTBEAT_MS = 220;
   const LEASE_MS = 1500;
-  const HARD_SNAP_THRESHOLD_PX = 20;
-  const SOFT_CORRECTION_WINDOW_PX = 5;
+  const HARD_SNAP_THRESHOLD_PX = 90;
+  const SOFT_CORRECTION_WINDOW_PX = 30;
+  const FOLLOWER_CORRECTION_GAIN = 0.03;
+  const FOLLOWER_MAX_DELTA_PER_FRAME = 0.85;
   let visualRafId = null;
   let transportPollTimer = null;
   let transportHeartbeatTimer = null;
   let suppressTransportPublish = false;
   let isConductor = false;
-  let followerTargetPositionPx = null;
   let transportState = {
     songId: "",
     isPlaying: false,
@@ -165,9 +166,6 @@ document.addEventListener("DOMContentLoaded", () => {
     isConductor = remoteConductorId !== "" && remoteConductorId === clientSourceId;
     updateTransportRoleStatus();
 
-    if (!isConductor && remoteConductorId && remoteConductorId !== clientSourceId) {
-      followerTargetPositionPx = computeRemoteNowPosition(remote, Date.now());
-    }
     const remoteSpeed = parseInt(remote.speed || scrollSpeedInput.value, 10);
     if (parseInt(scrollSpeedInput.value, 10) !== remoteSpeed) {
       suppressTransportPublish = true;
@@ -180,7 +178,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const drift = remotePos - teleprompter.scrollTop;
     if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
       teleprompter.scrollTop = Math.max(0, remotePos);
-      followerTargetPositionPx = null;
     }
 
     isScrolling = !!remote.isPlaying;
@@ -225,12 +222,22 @@ document.addEventListener("DOMContentLoaded", () => {
       transportState.speed = parseInt(scrollSpeedInput.value, 10);
       const nowPosition = computeRemoteNowPosition(transportState, Date.now());
       teleprompter.scrollTop = Math.max(0, nowPosition);
-    } else if (!isConductor && followerTargetPositionPx !== null) {
-      const drift = followerTargetPositionPx - teleprompter.scrollTop;
+    } else if (
+      !isConductor &&
+      transportState.conductorId &&
+      transportState.conductorId !== clientSourceId
+    ) {
+      const predictedRemotePosition = computeRemoteNowPosition(transportState, Date.now());
+      const drift = predictedRemotePosition - teleprompter.scrollTop;
       if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
-        teleprompter.scrollTop = Math.max(0, followerTargetPositionPx);
+        teleprompter.scrollTop = Math.max(0, predictedRemotePosition);
       } else if (Math.abs(drift) > SOFT_CORRECTION_WINDOW_PX) {
-        teleprompter.scrollTop += drift * 0.2;
+        const easedDelta = drift * FOLLOWER_CORRECTION_GAIN;
+        const clampedDelta = Math.max(
+          -FOLLOWER_MAX_DELTA_PER_FRAME,
+          Math.min(FOLLOWER_MAX_DELTA_PER_FRAME, easedDelta)
+        );
+        teleprompter.scrollTop += clampedDelta;
       }
     }
 
