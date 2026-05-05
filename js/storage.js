@@ -176,14 +176,20 @@
       if (!response.ok) {
         const apiMessage =
           payload && payload.error ? `: ${payload.error}` : "";
-        throw new Error(`Transport save failed (${response.status})${apiMessage}`);
+        const err = new Error(`Transport save failed (${response.status})${apiMessage}`);
+        err.statusCode = response.status;
+        throw err;
       }
 
       setTransportSyncStatus("Sync: Live", "ok");
       return payload || { ok: true };
     } catch (error) {
       console.warn("Transport save failed.", error);
-      setTransportSyncStatus("Sync: Lagging", "error");
+      if (error && error.statusCode === 409) {
+        setTransportSyncStatus("Sync: Following conductor", "warning");
+      } else {
+        setTransportSyncStatus("Sync: Lagging", "error");
+      }
       return null;
     } finally {
       clearTimeout(timer);

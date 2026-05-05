@@ -302,6 +302,10 @@ button:hover {
   color: #ffc107;
 }
 
+.sync-status[data-state="degraded"] {
+  color: #ff9800;
+}
+
 .sync-status[data-state="error"] {
   color: #f44336;
 }

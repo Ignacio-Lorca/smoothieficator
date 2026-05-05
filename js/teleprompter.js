@@ -15,9 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Scroll state
   let isScrolling = false;
-  let scrollInterval = null;
-  let scrollAccumulator = 0; // Accumulator for fractional scrolling
-  const baseScrollSpeed = 1; // Base pixels per interval
+  let timelinePositionPx = 0;
 
   // Song navigation state
   let savedSongs = [];
@@ -33,13 +31,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Zoom state
   let currentZoomLevel = 100; // Default zoom level in percentage
   const clientSourceId = `client-${Math.random().toString(36).slice(2, 10)}`;
-  const TRANSPORT_POLL_MS = 700;
-  const HEARTBEAT_MS = 220;
+  const TRANSPORT_POLL_MS = 380;
+  const HEARTBEAT_MS = 200;
   const LEASE_MS = 1500;
-  const HARD_SNAP_THRESHOLD_PX = 90;
-  const SOFT_CORRECTION_WINDOW_PX = 30;
-  const FOLLOWER_CORRECTION_GAIN = 0.03;
-  const FOLLOWER_MAX_DELTA_PER_FRAME = 0.85;
+  const HARD_SNAP_THRESHOLD_PX = 80;
+  const SOFT_CORRECTION_WINDOW_PX = 14;
+  const FOLLOWER_CORRECTION_GAIN = 0.06;
+  const FOLLOWER_MAX_DELTA_PER_FRAME = 1.5;
+  const FOLLOWER_INTERPOLATION_BUFFER_MS = 140;
   let visualRafId = null;
   let transportPollTimer = null;
   let transportHeartbeatTimer = null;
@@ -59,12 +58,53 @@ document.addEventListener("DOMContentLoaded", () => {
     serverNow: "",
   };
 
+  function maxTimelinePosition() {
+    const contentHeight = songContent?.scrollHeight || teleprompter.scrollHeight;
+    return Math.max(0, contentHeight - teleprompter.clientHeight);
+  }
+
+  function clampTimelinePosition(positionPx) {
+    return Math.max(0, Math.min(maxTimelinePosition(), positionPx));
+  }
+
+  function setTimelinePosition(positionPx) {
+    timelinePositionPx = clampTimelinePosition(positionPx);
+    if (songContent) {
+      songContent.style.transform = `translateY(${-timelinePositionPx}px)`;
+    }
+    // Keep native scroll neutral so transform is the single render path.
+    if (teleprompter.scrollTop !== 0) {
+      teleprompter.scrollTop = 0;
+    }
+  }
+
   function updateTransportRoleStatus() {
     const statusElement = document.getElementById("transport-role-status");
     if (!statusElement) return;
     statusElement.classList.remove("hidden");
     statusElement.textContent = isConductor ? "Role: Conductor" : "Role: Follower";
     statusElement.dataset.state = isConductor ? "ok" : "warning";
+  }
+
+  function updateTransportHealthStatus(remote) {
+    if (
+      !window.songStorage ||
+      typeof window.songStorage.setTransportSyncStatus !== "function" ||
+      !remote
+    ) {
+      return;
+    }
+
+    const serverNowMs = Date.parse(remote.serverNow || "");
+    const updatedAtMs = Date.parse(remote.updatedAt || "");
+    if (!Number.isFinite(serverNowMs) || !Number.isFinite(updatedAtMs)) {
+      return;
+    }
+
+    const stalenessMs = Math.max(0, serverNowMs - updatedAtMs);
+    if (stalenessMs > 2000) {
+      window.songStorage.setTransportSyncStatus("Sync: Degraded", "degraded");
+    }
   }
 
   function getStoredSongs() {
@@ -97,7 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function computeRemoteNowPosition(state, nowMs) {
-    if (!state) return teleprompter.scrollTop;
+    if (!state) return timelinePositionPx;
     const updatedAtMs = Date.parse(state.updatedAt || "");
     const safeUpdatedAt = Number.isFinite(updatedAtMs) ? updatedAtMs : nowMs;
     if (!state.isPlaying) return state.positionPx || 0;
@@ -120,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
       songId: getCurrentSongKey(),
       isPlaying: isScrolling,
       speed: parseInt(scrollSpeedInput.value, 10),
-      positionPx: teleprompter.scrollTop,
+      positionPx: timelinePositionPx,
       updatedAt: nowIso,
       sourceId: clientSourceId,
       conductorId: clientSourceId,
@@ -162,6 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     transportState = { ...transportState, ...remote };
+    updateTransportHealthStatus(remote);
     const remoteConductorId = remote.conductorId || "";
     isConductor = remoteConductorId !== "" && remoteConductorId === clientSourceId;
     updateTransportRoleStatus();
@@ -175,9 +216,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const remotePos = computeRemoteNowPosition(remote, Date.now());
-    const drift = remotePos - teleprompter.scrollTop;
+    const drift = remotePos - timelinePositionPx;
     if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
-      teleprompter.scrollTop = Math.max(0, remotePos);
+      setTimelinePosition(remotePos);
     }
 
     isScrolling = !!remote.isPlaying;
@@ -221,29 +262,33 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isScrolling && isConductor) {
       transportState.speed = parseInt(scrollSpeedInput.value, 10);
       const nowPosition = computeRemoteNowPosition(transportState, Date.now());
-      teleprompter.scrollTop = Math.max(0, nowPosition);
+      setTimelinePosition(nowPosition);
     } else if (
       !isConductor &&
       transportState.conductorId &&
       transportState.conductorId !== clientSourceId
     ) {
-      const predictedRemotePosition = computeRemoteNowPosition(transportState, Date.now());
-      const drift = predictedRemotePosition - teleprompter.scrollTop;
+      const renderNowMs = Date.now() - FOLLOWER_INTERPOLATION_BUFFER_MS;
+      const predictedRemotePosition = computeRemoteNowPosition(transportState, renderNowMs);
+      const drift = predictedRemotePosition - timelinePositionPx;
       if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
-        teleprompter.scrollTop = Math.max(0, predictedRemotePosition);
+        setTimelinePosition(predictedRemotePosition);
       } else if (Math.abs(drift) > SOFT_CORRECTION_WINDOW_PX) {
         const easedDelta = drift * FOLLOWER_CORRECTION_GAIN;
         const clampedDelta = Math.max(
           -FOLLOWER_MAX_DELTA_PER_FRAME,
           Math.min(FOLLOWER_MAX_DELTA_PER_FRAME, easedDelta)
         );
-        teleprompter.scrollTop += clampedDelta;
+        setTimelinePosition(timelinePositionPx + clampedDelta);
+      } else if (transportState.isPlaying) {
+        // Continue smooth follower motion between polls.
+        const nextPosition = timelinePositionPx + speedPxPerMs(transportState.speed || 8) * 16;
+        setTimelinePosition(nextPosition);
       }
     }
 
     const reachedEnd =
-      teleprompter.scrollTop + teleprompter.clientHeight >=
-      teleprompter.scrollHeight - 10;
+      timelinePositionPx + teleprompter.clientHeight >= maxTimelinePosition() - 10;
     if (reachedEnd && isScrolling) {
       stopScrolling();
     }
@@ -334,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ...transportState,
       isPlaying: true,
       speed: parseInt(scrollSpeedInput.value, 10),
-      positionPx: teleprompter.scrollTop,
+      positionPx: timelinePositionPx,
       updatedAt: new Date().toISOString(),
       sourceId: clientSourceId,
       songId: getCurrentSongKey(),
@@ -362,12 +407,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isScrolling) return;
 
     isScrolling = false;
-    clearInterval(scrollInterval);
     transportState = {
       ...transportState,
       isPlaying: false,
       speed: parseInt(scrollSpeedInput.value, 10),
-      positionPx: teleprompter.scrollTop,
+      positionPx: timelinePositionPx,
       updatedAt: new Date().toISOString(),
       sourceId: clientSourceId,
       songId: getCurrentSongKey(),
@@ -388,7 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
     stopScrolling();
 
     // Scroll to top
-    teleprompter.scrollTop = 0;
+    setTimelinePosition(0);
     transportState = {
       ...transportState,
       positionPx: 0,
@@ -401,18 +445,6 @@ document.addEventListener("DOMContentLoaded", () => {
         console.warn("Failed to publish reset state", error);
       });
     }
-  }
-
-  function calculateScrollSpeed() {
-    // Get current scroll speed value (1-25)
-    const speedValue = parseInt(scrollSpeedInput.value);
-
-    // Updated formula to allow for speeds below 1 pixel per interval:
-    // Speed 1: 0.2 pixels per update (very very slow, takes 5 updates to move 1 pixel)
-    // Speed 5: 1.0 pixels per update (1 pixel per update - visible but still slow)
-    // Speed 13: ~2.6 pixels per update (medium)
-    // Speed 25: ~5.0 pixels per update (very fast)
-    return 0.2 + (speedValue - 1) * 0.2;
   }
 
   // Update zoom level and apply to song content
@@ -683,7 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
     editArea.scrollTop = 0;
 
     // Also ensure the teleprompter container is scrolled to the top
-    teleprompter.scrollTop = 0;
+    setTimelinePosition(0);
   }
 
   // Save edited content and exit edit mode
@@ -1019,18 +1051,22 @@ document.addEventListener("DOMContentLoaded", () => {
       case "ArrowUp":
         e.preventDefault();
         // Scroll up manually
-        teleprompter.scrollBy(0, -40);
+        setTimelinePosition(timelinePositionPx - 40);
         if (isConductor) {
-          publishTransportState({ isPlaying: false }).catch(() => {});
+          publishTransportState({ isPlaying: false, positionPx: timelinePositionPx }).catch(
+            () => {}
+          );
         }
         break;
 
       case "ArrowDown":
         e.preventDefault();
         // Scroll down manually
-        teleprompter.scrollBy(0, 40);
+        setTimelinePosition(timelinePositionPx + 40);
         if (isConductor) {
-          publishTransportState({ isPlaying: false }).catch(() => {});
+          publishTransportState({ isPlaying: false, positionPx: timelinePositionPx }).catch(
+            () => {}
+          );
         }
         break;
 
