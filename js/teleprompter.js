@@ -47,6 +47,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let isApplyingRemoteSongSwitch = false;
   let missingRemoteSongId = "";
   let lastTakeoverAttemptMs = 0;
+  let lastGesturePublishMs = 0;
+  let lastTouchY = null;
+  let touchGestureActive = false;
+  const GESTURE_PUBLISH_THROTTLE_MS = 100;
+  const WHEEL_DELTA_GAIN = 1;
+  const TOUCH_DELTA_GAIN = 1.1;
   let transportState = {
     songId: "",
     isPlaying: false,
@@ -392,6 +398,63 @@ document.addEventListener("DOMContentLoaded", () => {
     visualRafId = requestAnimationFrame(renderTransportPosition);
   }
 
+  function shouldHandleManualSeekInput() {
+    if (isEditMode) return false;
+    if (document.querySelector(".fullscreen-songs-view")) return false;
+    if (isApplyingRemoteSongSwitch) return false;
+    return true;
+  }
+
+  function maybePublishGestureSeek(force = false) {
+    const now = Date.now();
+    if (!force && now - lastGesturePublishMs < GESTURE_PUBLISH_THROTTLE_MS) return;
+    lastGesturePublishMs = now;
+    attemptTakeoverAndPublish("seek", {
+      isPlaying: false,
+      positionPx: timelinePositionPx,
+    }).catch(() => {});
+  }
+
+  function handleWheelSeek(event) {
+    if (!shouldHandleManualSeekInput()) return;
+    event.preventDefault();
+    const delta = event.deltaY * WHEEL_DELTA_GAIN;
+    if (!Number.isFinite(delta) || delta === 0) return;
+    setTimelinePosition(timelinePositionPx + delta);
+    maybePublishGestureSeek(false);
+  }
+
+  function handleTouchStartSeek(event) {
+    if (!shouldHandleManualSeekInput()) return;
+    if (!event.touches || event.touches.length === 0) return;
+    touchGestureActive = true;
+    lastTouchY = event.touches[0].clientY;
+  }
+
+  function handleTouchMoveSeek(event) {
+    if (!touchGestureActive || !shouldHandleManualSeekInput()) return;
+    if (!event.touches || event.touches.length === 0) return;
+    const touchY = event.touches[0].clientY;
+    if (!Number.isFinite(lastTouchY)) {
+      lastTouchY = touchY;
+      return;
+    }
+    const delta = (lastTouchY - touchY) * TOUCH_DELTA_GAIN;
+    lastTouchY = touchY;
+    if (!Number.isFinite(delta) || delta === 0) return;
+    event.preventDefault();
+    setTimelinePosition(timelinePositionPx + delta);
+    maybePublishGestureSeek(false);
+  }
+
+  function handleTouchEndSeek() {
+    if (!touchGestureActive) return;
+    touchGestureActive = false;
+    lastTouchY = null;
+    if (!shouldHandleManualSeekInput()) return;
+    maybePublishGestureSeek(true);
+  }
+
   // Initialize scroll controls
   startScrollBtn.addEventListener("click", startScrolling);
   stopScrollBtn.addEventListener("click", stopScrolling);
@@ -425,6 +488,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Keyboard controls
   document.addEventListener("keydown", handleKeyDown);
+  teleprompter.addEventListener("wheel", handleWheelSeek, { passive: false });
+  teleprompter.addEventListener("touchstart", handleTouchStartSeek, { passive: true });
+  teleprompter.addEventListener("touchmove", handleTouchMoveSeek, { passive: false });
+  teleprompter.addEventListener("touchend", handleTouchEndSeek, { passive: true });
+  teleprompter.addEventListener("touchcancel", handleTouchEndSeek, { passive: true });
 
   // Handle song loaded event
   window.addEventListener("songLoaded", function () {
