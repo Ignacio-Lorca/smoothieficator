@@ -33,11 +33,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Zoom state
   let currentZoomLevel = 100; // Default zoom level in percentage
   const clientSourceId = `client-${Math.random().toString(36).slice(2, 10)}`;
-  const TRANSPORT_POLL_MS = 400;
-  const REMOTE_APPLY_EPSILON_PX = 8;
+  const TRANSPORT_POLL_MS = 350;
+  const HEARTBEAT_MS = 350;
+  const LEASE_MS = 1500;
+  const HARD_SNAP_THRESHOLD_PX = 20;
+  const SOFT_CORRECTION_WINDOW_PX = 5;
   let visualRafId = null;
   let transportPollTimer = null;
+  let transportHeartbeatTimer = null;
   let suppressTransportPublish = false;
+  let isConductor = false;
+  let followerTargetPositionPx = null;
   let transportState = {
     songId: "",
     isPlaying: false,
@@ -46,7 +52,19 @@ document.addEventListener("DOMContentLoaded", () => {
     updatedAt: new Date(0).toISOString(),
     sourceId: "",
     version: 0,
+    conductorId: "",
+    conductorUntil: "",
+    lastHeartbeatAt: "",
+    serverNow: "",
   };
+
+  function updateTransportRoleStatus() {
+    const statusElement = document.getElementById("transport-role-status");
+    if (!statusElement) return;
+    statusElement.classList.remove("hidden");
+    statusElement.textContent = isConductor ? "Role: Conductor" : "Role: Follower";
+    statusElement.dataset.state = isConductor ? "ok" : "warning";
+  }
 
   function getStoredSongs() {
     if (window.songStorage && typeof window.songStorage.readLocalCache === "function") {
@@ -99,22 +117,39 @@ document.addEventListener("DOMContentLoaded", () => {
     transportState = {
       ...transportState,
       songId: getCurrentSongKey(),
-      isPlaying,
+      isPlaying: isScrolling,
       speed: parseInt(scrollSpeedInput.value, 10),
       positionPx: teleprompter.scrollTop,
       updatedAt: nowIso,
       sourceId: clientSourceId,
+      conductorId: clientSourceId,
+      leaseMs: LEASE_MS,
       ...overrides,
       updatedAt: nowIso,
       sourceId: clientSourceId,
+      conductorId: clientSourceId,
     };
 
-    await window.songStorage.saveTransportState(transportState);
+    const response = await window.songStorage.saveTransportState(transportState);
+    if (response && response.ok) {
+      isConductor = true;
+      updateTransportRoleStatus();
+      transportState = {
+        ...transportState,
+        conductorId: response.conductorId || clientSourceId,
+        conductorUntil: response.conductorUntil || transportState.conductorUntil,
+        serverNow: response.serverNow || transportState.serverNow,
+        version: response.version || transportState.version,
+      };
+      return true;
+    }
+    isConductor = false;
+    updateTransportRoleStatus();
+    return false;
   }
 
   function applyRemoteTransport(remote) {
     if (!remote || !remote.updatedAt) return;
-    if (remote.sourceId === clientSourceId) return;
     if (remote.songId && getCurrentSongKey() && remote.songId !== getCurrentSongKey()) {
       return;
     }
@@ -126,6 +161,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     transportState = { ...transportState, ...remote };
+    const remoteConductorId = remote.conductorId || "";
+    isConductor = remoteConductorId !== "" && remoteConductorId === clientSourceId;
+    updateTransportRoleStatus();
+
+    if (!isConductor && remoteConductorId && remoteConductorId !== clientSourceId) {
+      followerTargetPositionPx = computeRemoteNowPosition(remote, Date.now());
+    }
     const remoteSpeed = parseInt(remote.speed || scrollSpeedInput.value, 10);
     if (parseInt(scrollSpeedInput.value, 10) !== remoteSpeed) {
       suppressTransportPublish = true;
@@ -135,8 +177,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const remotePos = computeRemoteNowPosition(remote, Date.now());
-    if (Math.abs(teleprompter.scrollTop - remotePos) > REMOTE_APPLY_EPSILON_PX) {
+    const drift = remotePos - teleprompter.scrollTop;
+    if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
       teleprompter.scrollTop = Math.max(0, remotePos);
+      followerTargetPositionPx = null;
     }
 
     isScrolling = !!remote.isPlaying;
@@ -166,11 +210,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }, TRANSPORT_POLL_MS);
   }
 
+  function startTransportHeartbeat() {
+    if (transportHeartbeatTimer) clearInterval(transportHeartbeatTimer);
+    transportHeartbeatTimer = setInterval(() => {
+      if (!isConductor || !isScrolling) return;
+      publishTransportState({ isPlaying: true }).catch((error) => {
+        console.warn("Transport heartbeat failed", error);
+      });
+    }, HEARTBEAT_MS);
+  }
+
   function renderTransportPosition() {
-    if (isScrolling) {
+    if (isScrolling && isConductor) {
       transportState.speed = parseInt(scrollSpeedInput.value, 10);
       const nowPosition = computeRemoteNowPosition(transportState, Date.now());
       teleprompter.scrollTop = Math.max(0, nowPosition);
+    } else if (!isConductor && followerTargetPositionPx !== null) {
+      const drift = followerTargetPositionPx - teleprompter.scrollTop;
+      if (Math.abs(drift) > HARD_SNAP_THRESHOLD_PX) {
+        teleprompter.scrollTop = Math.max(0, followerTargetPositionPx);
+      } else if (Math.abs(drift) > SOFT_CORRECTION_WINDOW_PX) {
+        teleprompter.scrollTop += drift * 0.2;
+      }
     }
 
     const reachedEnd =
@@ -214,9 +275,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Save scroll speed for current song
     saveScrollSpeedForCurrentSong();
-    publishTransportState().catch((error) => {
-      console.warn("Failed to publish speed update", error);
-    });
+    if (isConductor) {
+      publishTransportState().catch((error) => {
+        console.warn("Failed to publish speed update", error);
+      });
+    }
   });
 
   // Keyboard controls
@@ -227,19 +290,32 @@ document.addEventListener("DOMContentLoaded", () => {
     resetScroll();
     loadSavedSongs(); // Update the saved songs array and current index
     loadZoomLevelForCurrentSong(); // Load the zoom level for the song
-    publishTransportState({
-      songId: getCurrentSongKey(),
-      isPlaying: false,
-      positionPx: 0,
-    }).catch((error) => {
-      console.warn("Failed to publish song reset", error);
-    });
+    if (isConductor) {
+      publishTransportState({
+        songId: getCurrentSongKey(),
+        isPlaying: false,
+        positionPx: 0,
+      }).catch((error) => {
+        console.warn("Failed to publish song reset", error);
+      });
+    }
   });
 
   startVisualLoop();
   startTransportPolling();
+  startTransportHeartbeat();
+  updateTransportRoleStatus();
   pollTransportState().catch((error) => {
     console.warn("Initial transport fetch failed", error);
+  });
+  window.addEventListener("beforeunload", () => {
+    if (!isConductor || !window.songStorage) return;
+    window.songStorage.saveTransportState({
+      ...transportState,
+      sourceId: clientSourceId,
+      releaseLease: true,
+      leaseMs: LEASE_MS,
+    });
   });
 
   function startScrolling() {
@@ -261,9 +337,18 @@ document.addEventListener("DOMContentLoaded", () => {
     startScrollBtn.classList.add("hidden");
     stopScrollBtn.classList.remove("hidden");
 
-    publishTransportState({ isPlaying: true }).catch((error) => {
-      console.warn("Failed to publish play state", error);
-    });
+    publishTransportState({ isPlaying: true })
+      .then((ok) => {
+        if (!ok) {
+          // Another browser is the conductor; stay follower and wait for sync.
+          isScrolling = false;
+          startScrollBtn.classList.remove("hidden");
+          stopScrollBtn.classList.add("hidden");
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to publish play state", error);
+      });
   }
 
   function stopScrolling() {
@@ -284,9 +369,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Show start button, hide stop button
     startScrollBtn.classList.remove("hidden");
     stopScrollBtn.classList.add("hidden");
-    publishTransportState({ isPlaying: false }).catch((error) => {
-      console.warn("Failed to publish pause state", error);
-    });
+    if (isConductor) {
+      publishTransportState({ isPlaying: false }).catch((error) => {
+        console.warn("Failed to publish pause state", error);
+      });
+    }
   }
 
   function resetScroll() {
@@ -302,9 +389,11 @@ document.addEventListener("DOMContentLoaded", () => {
       songId: getCurrentSongKey(),
       sourceId: clientSourceId,
     };
-    publishTransportState({ isPlaying: false, positionPx: 0 }).catch((error) => {
-      console.warn("Failed to publish reset state", error);
-    });
+    if (isConductor) {
+      publishTransportState({ isPlaying: false, positionPx: 0 }).catch((error) => {
+        console.warn("Failed to publish reset state", error);
+      });
+    }
   }
 
   function calculateScrollSpeed() {
@@ -924,14 +1013,18 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         // Scroll up manually
         teleprompter.scrollBy(0, -40);
-        publishTransportState({ isPlaying: false }).catch(() => {});
+        if (isConductor) {
+          publishTransportState({ isPlaying: false }).catch(() => {});
+        }
         break;
 
       case "ArrowDown":
         e.preventDefault();
         // Scroll down manually
         teleprompter.scrollBy(0, 40);
-        publishTransportState({ isPlaying: false }).catch(() => {});
+        if (isConductor) {
+          publishTransportState({ isPlaying: false }).catch(() => {});
+        }
         break;
 
       case "Home":

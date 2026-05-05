@@ -28,6 +28,10 @@ function default_state(): array
         "updatedAt" => gmdate("c"),
         "sourceId" => "",
         "version" => 1,
+        "conductorId" => "",
+        "conductorUntil" => "",
+        "lastHeartbeatAt" => "",
+        "serverNow" => gmdate("c"),
     ];
 }
 
@@ -48,6 +52,7 @@ if ($_SERVER["REQUEST_METHOD"] === "GET") {
     if (!is_array($decoded)) {
         $decoded = default_state();
     }
+    $decoded["serverNow"] = gmdate("c");
     respond(200, $decoded);
 }
 
@@ -65,14 +70,56 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $current = default_state();
     }
 
+    $sourceId = (string)($payload["sourceId"] ?? "");
+    $nowIso = gmdate("c");
+    $nowTs = strtotime($nowIso);
+    $currentConductorId = (string)($current["conductorId"] ?? "");
+    $currentConductorUntil = (string)($current["conductorUntil"] ?? "");
+    $currentConductorUntilTs = strtotime($currentConductorUntil ?: "");
+    $leaseActive = $currentConductorId !== ""
+        && $currentConductorUntilTs !== false
+        && $currentConductorUntilTs >= $nowTs;
+
+    $releaseLease = (bool)($payload["releaseLease"] ?? false);
+    if ($releaseLease && $sourceId !== "" && $sourceId === $currentConductorId) {
+        $currentConductorId = "";
+        $leaseActive = false;
+    }
+
+    if ($leaseActive && $sourceId !== $currentConductorId) {
+        respond(409, [
+            "error" => "Conductor lease is held by another client",
+            "conductorId" => $currentConductorId,
+            "conductorUntil" => $currentConductorUntil,
+            "serverNow" => $nowIso,
+        ]);
+    }
+
+    if ($sourceId !== "") {
+        $currentConductorId = $sourceId;
+    }
+
+    $leaseMs = (int)($payload["leaseMs"] ?? 1500);
+    if ($leaseMs < 500) {
+        $leaseMs = 500;
+    }
+    if ($leaseMs > 10000) {
+        $leaseMs = 10000;
+    }
+    $conductorUntilIso = gmdate("c", $nowTs + (int)ceil($leaseMs / 1000));
+
     $next = [
         "songId" => (string)($payload["songId"] ?? ""),
         "isPlaying" => (bool)($payload["isPlaying"] ?? false),
         "speed" => (int)($payload["speed"] ?? 8),
         "positionPx" => (float)($payload["positionPx"] ?? 0),
-        "updatedAt" => gmdate("c"),
-        "sourceId" => (string)($payload["sourceId"] ?? ""),
+        "updatedAt" => $nowIso,
+        "sourceId" => $sourceId,
         "version" => (int)($current["version"] ?? 0) + 1,
+        "conductorId" => $currentConductorId,
+        "conductorUntil" => $conductorUntilIso,
+        "lastHeartbeatAt" => $nowIso,
+        "serverNow" => $nowIso,
     ];
 
     $handle = fopen($dataFile, "c+");
@@ -92,7 +139,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     flock($handle, LOCK_UN);
     fclose($handle);
 
-    respond(200, ["ok" => true, "updatedAt" => $next["updatedAt"], "version" => $next["version"]]);
+    respond(200, [
+        "ok" => true,
+        "updatedAt" => $next["updatedAt"],
+        "version" => $next["version"],
+        "conductorId" => $next["conductorId"],
+        "conductorUntil" => $next["conductorUntil"],
+        "serverNow" => $nowIso,
+    ]);
 }
 
 respond(405, ["error" => "Method not allowed"]);

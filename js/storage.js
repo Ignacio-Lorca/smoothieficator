@@ -166,16 +166,25 @@
         signal: controller.signal,
       });
 
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_error) {
+        payload = null;
+      }
+
       if (!response.ok) {
-        throw new Error(`Transport save failed (${response.status})`);
+        const apiMessage =
+          payload && payload.error ? `: ${payload.error}` : "";
+        throw new Error(`Transport save failed (${response.status})${apiMessage}`);
       }
 
       setTransportSyncStatus("Sync: Live", "ok");
-      return true;
+      return payload || { ok: true };
     } catch (error) {
       console.warn("Transport save failed.", error);
       setTransportSyncStatus("Sync: Lagging", "error");
-      return false;
+      return null;
     } finally {
       clearTimeout(timer);
     }
