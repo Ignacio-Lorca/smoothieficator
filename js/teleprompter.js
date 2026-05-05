@@ -33,6 +33,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // Zoom state
   let currentZoomLevel = 100; // Default zoom level in percentage
 
+  function getStoredSongs() {
+    if (window.songStorage && typeof window.songStorage.readLocalCache === "function") {
+      return window.songStorage.readLocalCache();
+    }
+    return JSON.parse(localStorage.getItem("savedSongs") || "{}");
+  }
+
+  function saveStoredSongs(songs) {
+    if (window.songStorage && typeof window.songStorage.saveSongs === "function") {
+      window.songStorage.saveSongs(songs);
+      return;
+    }
+    localStorage.setItem("savedSongs", JSON.stringify(songs));
+  }
+
   // Initialize scroll controls
   startScrollBtn.addEventListener("click", startScrolling);
   stopScrollBtn.addEventListener("click", stopScrolling);
@@ -187,10 +202,8 @@ document.addEventListener("DOMContentLoaded", () => {
       .trim();
 
     if (currentTitle && currentArtist && !window.navigationInProgress) {
-      // Get saved songs from localStorage
-      const savedSongsJson = localStorage.getItem("savedSongs");
-      if (savedSongsJson) {
-        const savedSongs = JSON.parse(savedSongsJson);
+      const savedSongs = getStoredSongs();
+      if (Object.keys(savedSongs).length > 0) {
 
         // Find and update the matching song
         Object.keys(savedSongs).forEach((timestamp) => {
@@ -200,8 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         });
 
-        // Save back to localStorage
-        localStorage.setItem("savedSongs", JSON.stringify(savedSongs));
+        saveStoredSongs(savedSongs);
       }
     }
   }
@@ -216,10 +228,8 @@ document.addEventListener("DOMContentLoaded", () => {
       .trim();
 
     if (currentTitle && currentArtist) {
-      // Get saved songs from localStorage
-      const savedSongsJson = localStorage.getItem("savedSongs");
-      if (savedSongsJson) {
-        const savedSongs = JSON.parse(savedSongsJson);
+      const savedSongs = getStoredSongs();
+      if (Object.keys(savedSongs).length > 0) {
 
         // Find the matching song and get its zoom level
         for (const timestamp of Object.keys(savedSongs)) {
@@ -447,8 +457,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Get edited content from textarea
       const editedContent = editArea.value;
 
-      // Find the song in local storage
-      const savedSongs = JSON.parse(localStorage.getItem("savedSongs") || "{}");
+      const savedSongs = getStoredSongs();
       const entries = Object.entries(savedSongs);
       const match = entries.find(
         ([id, song]) => song.title === songTitle && song.artist === songArtist
@@ -460,8 +469,7 @@ document.addEventListener("DOMContentLoaded", () => {
         song.content = editedContent;
         savedSongs[id] = song;
 
-        // Save to localStorage
-        localStorage.setItem("savedSongs", JSON.stringify(savedSongs));
+        saveStoredSongs(savedSongs);
 
         // Update the shared reference in scraper.js if possible
         if (typeof window.updateLocalSongsCache === "function") {
@@ -527,10 +535,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load saved songs
   function loadSavedSongs() {
-    const localStorageSongs = localStorage.getItem("savedSongs");
-    if (!localStorageSongs) return [];
-
-    const localSongs = JSON.parse(localStorageSongs);
+    const localSongs = getStoredSongs();
+    if (!localSongs || Object.keys(localSongs).length === 0) return [];
     // Convert from object to array with timestamps as keys
     savedSongs = Object.entries(localSongs).map(([timestamp, song]) => ({
       ...song,
@@ -705,10 +711,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .trim();
 
       if (currentTitle && currentArtist) {
-        // Try to find song in local storage
-        const savedSongs = JSON.parse(
-          localStorage.getItem("savedSongs") || "{}"
-        );
+        const savedSongs = getStoredSongs();
         const entries = Object.entries(savedSongs);
         const match = entries.find(
           ([id, song]) =>
@@ -720,7 +723,7 @@ document.addEventListener("DOMContentLoaded", () => {
           // Update the song's scroll speed
           song.scrollSpeed = currentSpeed;
           savedSongs[id] = song;
-          localStorage.setItem("savedSongs", JSON.stringify(savedSongs));
+          saveStoredSongs(savedSongs);
 
           // Update the reference if we have it
           if (window.currentDisplayedSong) {

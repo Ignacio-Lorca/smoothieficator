@@ -433,10 +433,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Create a mobile-friendly saved songs list using CSS classes instead of inline styles
   function showMobileSavedSongsList() {
-    // Get saved songs from localStorage
-    const savedSongsData = JSON.parse(
-      localStorage.getItem("savedSongs") || "{}"
-    );
+    const savedSongsData =
+      window.songStorage && typeof window.songStorage.readLocalCache === "function"
+        ? window.songStorage.readLocalCache()
+        : JSON.parse(localStorage.getItem("savedSongs") || "{}");
     const savedSongsEntries = Object.entries(savedSongsData);
 
     // Create container with CSS classes
@@ -509,9 +509,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         deleteButton.addEventListener("click", () => {
           if (confirm(`Delete "${song.title}" from saved songs?`)) {
-            // Delete from localStorage
             delete savedSongsData[id];
-            localStorage.setItem("savedSongs", JSON.stringify(savedSongsData));
+            if (
+              window.songStorage &&
+              typeof window.songStorage.saveSongs === "function"
+            ) {
+              window.songStorage.saveSongs(savedSongsData);
+            } else {
+              localStorage.setItem("savedSongs", JSON.stringify(savedSongsData));
+            }
             // Remove from list
             ul.removeChild(li);
             // If no songs left, show message

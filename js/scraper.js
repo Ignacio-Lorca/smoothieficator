@@ -1,12 +1,36 @@
 // Song scraper functionality
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const songContent = document.getElementById("song-content");
   const loadingIndicator = document.getElementById("loading-indicator");
   const errorLoad = document.getElementById("error-load");
   const teleprompter = document.getElementById("teleprompter");
 
-  // Initialize local storage for saved songs
-  const localSongs = JSON.parse(localStorage.getItem("savedSongs") || "{}");
+  // In-memory songs cache; source of truth is window.songStorage when available.
+  const localSongs = {};
+
+  function getSongsSnapshot() {
+    return JSON.parse(JSON.stringify(localSongs));
+  }
+
+  async function persistSongs() {
+    if (window.songStorage && typeof window.songStorage.saveSongs === "function") {
+      await window.songStorage.saveSongs(getSongsSnapshot());
+    } else {
+      localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+    }
+  }
+
+  async function refreshSongsFromStorage() {
+    let songs = {};
+    if (window.songStorage && typeof window.songStorage.loadSongs === "function") {
+      songs = await window.songStorage.loadSongs();
+    } else {
+      songs = JSON.parse(localStorage.getItem("savedSongs") || "{}");
+    }
+
+    Object.keys(localSongs).forEach((key) => delete localSongs[key]);
+    Object.assign(localSongs, songs || {});
+  }
 
   // Play count tracking
   let playCountTimer = null;
@@ -16,9 +40,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Make a function to update the localSongs cache from teleprompter.js edit mode
   window.updateLocalSongsCache = function (updatedSongs) {
     // Update the in-memory cache to match localStorage
+    Object.keys(localSongs).forEach((key) => delete localSongs[key]);
     Object.assign(localSongs, updatedSongs);
     console.log("Local songs cache updated after editing");
   };
+
+  await refreshSongsFromStorage();
 
   // Listen for the manual extraction event
   document.addEventListener("songExtracted", (event) => {
@@ -39,13 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Increment play count for a song
-  function incrementPlayCount(song) {
-    // Find the song in localStorage
-    const savedSongsData = JSON.parse(
-      localStorage.getItem("savedSongs") || "{}"
-    );
-
-    const entries = Object.entries(savedSongsData);
+  async function incrementPlayCount(song) {
+    const entries = Object.entries(localSongs);
     const match = entries.find(
       ([id, savedSong]) =>
         savedSong.title === song.title && savedSong.artist === song.artist
@@ -58,12 +80,10 @@ document.addEventListener("DOMContentLoaded", () => {
         savedSong.playCount = 0;
       }
       savedSong.playCount++;
-      savedSongsData[id] = savedSong;
-      localStorage.setItem("savedSongs", JSON.stringify(savedSongsData));
+      localSongs[id] = savedSong;
+      await persistSongs();
 
       // Update the in-memory cache
-      localSongs[id] = savedSong;
-
       console.log(
         `Play count incremented for "${song.title}": ${savedSong.playCount}`
       );
@@ -81,7 +101,9 @@ document.addEventListener("DOMContentLoaded", () => {
     currentSongForPlayCount = song;
     playCountTimestamp = new Date().toISOString();
     playCountTimer = setTimeout(() => {
-      incrementPlayCount(song);
+      incrementPlayCount(song).catch((error) => {
+        console.error("Failed to increment play count:", error);
+      });
     }, 120000); // 2 minutes
 
     // Clear any existing content
@@ -182,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
         song.dateAdded = timestamp;
       }
       localSongs[timestamp] = song;
-      localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+      persistSongs();
 
       // Refresh the saved songs list if it's currently open
       updateSavedSongsDropdown();
@@ -235,7 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const [id, savedSong] = match;
       savedSong.scrollSpeed = newSpeed;
       localSongs[id] = savedSong;
-      localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+      persistSongs();
 
       // Update the current displayed song reference
       if (window.currentDisplayedSong) {
@@ -349,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
           song.title = newTitle.trim();
           song.artist = newArtist.trim();
           localSongs[id] = song;
-          localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+          persistSongs();
           showSavedSongs();
         });
         songItem.appendChild(renameButton);
@@ -360,7 +382,7 @@ document.addEventListener("DOMContentLoaded", () => {
         deleteButton.addEventListener("click", () => {
           if (confirm(`Delete "${song.title}" from saved songs?`)) {
             delete localSongs[id];
-            localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+            persistSongs();
             showSavedSongs(); // Refresh the list
           }
         });
@@ -448,9 +470,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateSavedSongsDropdown() {
     if (!savedSongsContainer) return;
 
-    const savedSongsData = JSON.parse(
-      localStorage.getItem("savedSongs") || "{}"
-    );
+    const savedSongsData = localSongs;
     savedSongsContainer.innerHTML = "";
 
     const header = document.createElement("div");
@@ -518,7 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
           song.title = newTitle.trim();
           song.artist = newArtist.trim();
           localSongs[id] = song;
-          localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+          persistSongs();
           updateSavedSongsDropdown();
         });
         songItem.appendChild(renameButton);
@@ -531,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
           e.stopPropagation();
           if (confirm(`Delete "${song.title}" from saved songs?`)) {
             delete localSongs[id];
-            localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+            persistSongs();
             updateSavedSongsDropdown(); // Refresh the list
           }
         });
@@ -601,7 +621,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export songs functionality
   if (exportSongsBtn) {
     exportSongsBtn.addEventListener("click", () => {
-      const savedSongsData = localStorage.getItem("savedSongs");
+      const savedSongsData = JSON.stringify(localSongs);
 
       if (!savedSongsData || savedSongsData === "{}") {
         alert("No songs to export. Save some songs first!");
@@ -659,9 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // Get current songs
-          const currentSongs = JSON.parse(
-            localStorage.getItem("savedSongs") || "{}"
-          );
+          const currentSongs = { ...localSongs };
 
           // Count stats for user feedback
           let totalImported = 0;
@@ -717,11 +735,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           });
 
-          // Save merged data back to localStorage
-          localStorage.setItem("savedSongs", JSON.stringify(currentSongs));
-
-          // Update the local songs reference to match localStorage
+          // Update cache and persist remotely/local fallback
+          Object.keys(localSongs).forEach((key) => delete localSongs[key]);
           Object.assign(localSongs, currentSongs);
+          persistSongs();
 
           // Update UI and show status message
           updateSavedSongsDropdown();
@@ -898,9 +915,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Show fullscreen saved songs view
   function showFullscreenSavedSongs() {
-    const savedSongsData = JSON.parse(
-      localStorage.getItem("savedSongs") || "{}"
-    );
+    const savedSongsData = localSongs;
 
     // Create fullscreen overlay
     fullscreenSongsView = document.createElement("div");
@@ -1444,12 +1459,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updatedSong.title = newTitle.trim();
     updatedSong.artist = newArtist.trim();
     localSongs[id] = updatedSong;
-    localStorage.setItem("savedSongs", JSON.stringify(localSongs));
-
-    // Reload data from localStorage to get fresh object references
-    const savedSongsData = JSON.parse(
-      localStorage.getItem("savedSongs") || "{}"
-    );
+    persistSongs();
+    const savedSongsData = localSongs;
     const savedSongsEntries = Object.entries(savedSongsData);
     
     // Update allSongsData with fresh references
@@ -1463,7 +1474,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function deleteSongInFullscreen(id, song) {
     if (confirm(`Delete "${song.title}" from saved songs?`)) {
       delete localSongs[id];
-      localStorage.setItem("savedSongs", JSON.stringify(localSongs));
+      persistSongs();
 
       // Remove from UI and update arrays
       const songItem = document.querySelector(`[data-song-id="${id}"]`);
@@ -1508,4 +1519,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Make fullscreen function globally available
   window.showFullscreenSavedSongs = showFullscreenSavedSongs;
   window.closeFullscreenSavedSongs = closeFullscreenSavedSongs;
+
+  // Initialize saved songs UI from remote/local storage.
+  updateSavedSongsDropdown();
 });

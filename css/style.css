@@ -287,6 +287,29 @@ button:hover {
   height: 100%;
 }
 
+.sync-status {
+  font-size: 0.75rem;
+  color: #9aa0a6;
+  min-width: 130px;
+  text-align: right;
+}
+
+.sync-status[data-state="ok"] {
+  color: #4caf50;
+}
+
+.sync-status[data-state="warning"] {
+  color: #ffc107;
+}
+
+.sync-status[data-state="error"] {
+  color: #f44336;
+}
+
+.sync-status[data-state="saving"] {
+  color: #9aa0a6;
+}
+
 .song-navigation button {
   background-color: transparent;
   border: none;
