@@ -31,6 +31,7 @@ function default_state(): array
         "conductorId" => "",
         "conductorUntil" => "",
         "lastHeartbeatAt" => "",
+        "lastTakeoverAt" => "",
         "serverNow" => gmdate("c"),
     ];
 }
@@ -64,40 +65,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         respond(400, ["error" => "Invalid JSON payload"]);
     }
 
-    $currentContent = file_get_contents($dataFile);
-    $current = json_decode($currentContent ?: "", true);
-    if (!is_array($current)) {
-        $current = default_state();
-    }
-
     $sourceId = (string)($payload["sourceId"] ?? "");
-    $nowIso = gmdate("c");
-    $nowTs = strtotime($nowIso);
-    $currentConductorId = (string)($current["conductorId"] ?? "");
-    $currentConductorUntil = (string)($current["conductorUntil"] ?? "");
-    $currentConductorUntilTs = strtotime($currentConductorUntil ?: "");
-    $leaseActive = $currentConductorId !== ""
-        && $currentConductorUntilTs !== false
-        && $currentConductorUntilTs >= $nowTs;
-
     $releaseLease = (bool)($payload["releaseLease"] ?? false);
-    if ($releaseLease && $sourceId !== "" && $sourceId === $currentConductorId) {
-        $currentConductorId = "";
-        $leaseActive = false;
-    }
-
-    if ($leaseActive && $sourceId !== $currentConductorId) {
-        respond(409, [
-            "error" => "Conductor lease is held by another client",
-            "conductorId" => $currentConductorId,
-            "conductorUntil" => $currentConductorUntil,
-            "serverNow" => $nowIso,
-        ]);
-    }
-
-    if ($sourceId !== "") {
-        $currentConductorId = $sourceId;
-    }
+    $requestTakeover = (bool)($payload["requestTakeover"] ?? false);
+    $actionType = (string)($payload["actionType"] ?? "");
+    $takeoverCooldownMs = 450;
 
     $leaseMs = (int)($payload["leaseMs"] ?? 1500);
     if ($leaseMs < 500) {
@@ -106,21 +78,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if ($leaseMs > 10000) {
         $leaseMs = 10000;
     }
-    $conductorUntilIso = gmdate("c", $nowTs + (int)ceil($leaseMs / 1000));
-
-    $next = [
-        "songId" => (string)($payload["songId"] ?? ""),
-        "isPlaying" => (bool)($payload["isPlaying"] ?? false),
-        "speed" => (int)($payload["speed"] ?? 8),
-        "positionPx" => (float)($payload["positionPx"] ?? 0),
-        "updatedAt" => $nowIso,
-        "sourceId" => $sourceId,
-        "version" => (int)($current["version"] ?? 0) + 1,
-        "conductorId" => $currentConductorId,
-        "conductorUntil" => $conductorUntilIso,
-        "lastHeartbeatAt" => $nowIso,
-        "serverNow" => $nowIso,
-    ];
 
     $handle = fopen($dataFile, "c+");
     if ($handle === false) {
@@ -132,8 +89,87 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         respond(500, ["error" => "Unable to lock transport data file"]);
     }
 
-    ftruncate($handle, 0);
     rewind($handle);
+    $lockedContent = stream_get_contents($handle);
+    $current = json_decode($lockedContent ?: "", true);
+    if (!is_array($current)) {
+        $current = default_state();
+    }
+
+    $nowIso = gmdate("c");
+    $nowTs = strtotime($nowIso);
+    $currentConductorId = (string)($current["conductorId"] ?? "");
+    $currentConductorUntil = (string)($current["conductorUntil"] ?? "");
+    $currentConductorUntilTs = strtotime($currentConductorUntil ?: "");
+    $leaseActive = $currentConductorId !== ""
+        && $currentConductorUntilTs !== false
+        && $currentConductorUntilTs >= $nowTs;
+    $lastTakeoverAt = (string)($current["lastTakeoverAt"] ?? "");
+    $lastTakeoverAtTs = strtotime($lastTakeoverAt ?: "");
+    $withinTakeoverCooldown = $lastTakeoverAtTs !== false
+        && ($nowTs - $lastTakeoverAtTs) * 1000 < $takeoverCooldownMs;
+
+    if ($releaseLease && $sourceId !== "" && $sourceId === $currentConductorId) {
+        $currentConductorId = "";
+        $leaseActive = false;
+    }
+
+    $isCompetingWriter = $leaseActive && $sourceId !== $currentConductorId;
+    if ($isCompetingWriter && !$requestTakeover) {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        respond(409, [
+            "error" => "Conductor lease is held by another client",
+            "conductorId" => $currentConductorId,
+            "conductorUntil" => $currentConductorUntil,
+            "serverNow" => $nowIso,
+            "version" => (int)($current["version"] ?? 0),
+        ]);
+    }
+
+    if ($isCompetingWriter && $requestTakeover && $withinTakeoverCooldown) {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        respond(409, [
+            "error" => "Takeover cooldown active",
+            "conductorId" => $currentConductorId,
+            "conductorUntil" => $currentConductorUntil,
+            "serverNow" => $nowIso,
+            "version" => (int)($current["version"] ?? 0),
+        ]);
+    }
+
+    if ($isCompetingWriter && $requestTakeover) {
+        $currentConductorId = $sourceId;
+        $lastTakeoverAt = $nowIso;
+    }
+
+    if ($sourceId !== "") {
+        $currentConductorId = $sourceId;
+    }
+
+    $conductorUntilIso = $currentConductorId === ""
+        ? $nowIso
+        : gmdate("c", $nowTs + (int)ceil($leaseMs / 1000));
+
+    $next = [
+        "songId" => (string)($payload["songId"] ?? ($current["songId"] ?? "")),
+        "isPlaying" => (bool)($payload["isPlaying"] ?? ($current["isPlaying"] ?? false)),
+        "speed" => (int)($payload["speed"] ?? ($current["speed"] ?? 8)),
+        "positionPx" => max(0, (float)($payload["positionPx"] ?? ($current["positionPx"] ?? 0))),
+        "updatedAt" => $nowIso,
+        "sourceId" => $sourceId,
+        "version" => (int)($current["version"] ?? 0) + 1,
+        "conductorId" => $currentConductorId,
+        "conductorUntil" => $conductorUntilIso,
+        "lastHeartbeatAt" => $nowIso,
+        "lastTakeoverAt" => $lastTakeoverAt,
+        "actionType" => $actionType,
+        "serverNow" => $nowIso,
+    ];
+
+    rewind($handle);
+    ftruncate($handle, 0);
     fwrite($handle, json_encode($next, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     fflush($handle);
     flock($handle, LOCK_UN);
