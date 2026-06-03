@@ -12,6 +12,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     return JSON.parse(JSON.stringify(localSongs));
   }
 
+  function generateSyncId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `sync-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function ensureSongSyncIds(songs) {
+    let changed = false;
+    const seen = new Set();
+
+    Object.entries(songs || {}).forEach(([key, song]) => {
+      if (!song || typeof song !== "object") return;
+
+      if (!song.syncId || typeof song.syncId !== "string") {
+        song.syncId = generateSyncId();
+        changed = true;
+      }
+
+      if (seen.has(song.syncId)) {
+        song.syncId = generateSyncId();
+        changed = true;
+      }
+      seen.add(song.syncId);
+      songs[key] = song;
+    });
+
+    return { songs, changed };
+  }
+
+  async function migrateSongSyncIdsIfNeeded() {
+    const { changed } = ensureSongSyncIds(localSongs);
+    if (changed) {
+      await persistSongs();
+    }
+  }
+
   async function persistSongs() {
     if (window.songStorage && typeof window.songStorage.saveSongs === "function") {
       await window.songStorage.saveSongs(getSongsSnapshot());
@@ -30,6 +67,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     Object.keys(localSongs).forEach((key) => delete localSongs[key]);
     Object.assign(localSongs, songs || {});
+    await migrateSongSyncIdsIfNeeded();
   }
 
   // Play count tracking
@@ -203,6 +241,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!song.dateAdded) {
         song.dateAdded = timestamp;
       }
+      if (!song.syncId) {
+        song.syncId = generateSyncId();
+      }
       localSongs[timestamp] = song;
       persistSongs();
 
@@ -225,14 +266,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Store current song reference for scroll speed updates
     window.currentDisplayedSong = song;
-    if (song && song.__songId) {
-      window.currentDisplayedSongId = song.__songId;
+    if (song && song.syncId) {
+      window.currentDisplayedSongId = song.syncId;
+    } else if (song && song.__songId) {
+      const entry = localSongs[song.__songId];
+      window.currentDisplayedSongId =
+        entry && entry.syncId ? entry.syncId : song.__songId;
     } else {
       const entries = Object.entries(localSongs);
       const match = entries.find(
         ([id, savedSong]) => savedSong.title === song.title && savedSong.artist === song.artist
       );
-      window.currentDisplayedSongId = match ? match[0] : null;
+      window.currentDisplayedSongId = match ? match[1].syncId || match[0] : null;
     }
 
     // Dispatch event that song has loaded
@@ -289,6 +334,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   window.getCurrentSongTransportId = function () {
+    if (window.currentDisplayedSong && window.currentDisplayedSong.syncId) {
+      return window.currentDisplayedSong.syncId;
+    }
     return window.currentDisplayedSongId || "";
   };
 
@@ -296,14 +344,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!transportSongId) return false;
 
     const entries = Object.entries(localSongs);
-    let match = entries.find(([id]) => id === transportSongId);
+    let match = entries.find(([, song]) => song.syncId === transportSongId);
 
-    // Backward compatibility for legacy title::artist transport IDs.
+    if (!match) {
+      match = entries.find(([id]) => id === transportSongId);
+    }
+
     if (!match && transportSongId.includes("::")) {
       const [title, artist] = transportSongId.split("::");
       match = entries.find(
         ([_, song]) => song.title === (title || "").trim() && song.artist === (artist || "").trim()
       );
+      if (match) {
+        console.warn(
+          "Resolved song by legacy title::artist transport ID; update clients to use syncId."
+        );
+      }
     }
 
     if (!match) return false;
@@ -757,12 +813,20 @@ document.addEventListener("DOMContentLoaded", async () => {
               if (existingSong.dateAdded) {
                 song.dateAdded = existingSong.dateAdded;
               }
+              if (existingSong.syncId) {
+                song.syncId = existingSong.syncId;
+              } else if (!song.syncId) {
+                song.syncId = generateSyncId();
+              }
               currentSongs[existingId] = song;
             } else {
               newSongs++;
               // Add as new song - preserve original dateAdded or use key as fallback
               if (!song.dateAdded) {
                 song.dateAdded = id; // Use the timestamp key as fallback for old exports
+              }
+              if (!song.syncId) {
+                song.syncId = generateSyncId();
               }
               currentSongs[id] = song;
             }
@@ -771,6 +835,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           // Update cache and persist remotely/local fallback
           Object.keys(localSongs).forEach((key) => delete localSongs[key]);
           Object.assign(localSongs, currentSongs);
+          ensureSongSyncIds(localSongs);
           persistSongs();
 
           // Update UI and show status message
