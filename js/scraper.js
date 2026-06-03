@@ -144,69 +144,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     }, 120000); // 2 minutes
 
-    // Clear any existing content
-    songContent.innerHTML = "";
-
-    // Add song title and artist
-    const header = document.createElement("div");
-    header.classList.add("song-header");
-    header.innerHTML = `<h2>${song.title}</h2><h3>by ${song.artist}</h3>`;
-    songContent.appendChild(header);
-
-    // Process the song content
-    let content = song.content;
-
-    // First, normalize any newlines to ensure consistent line breaks
-    content = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-    // Replace [ch] tags with spans for chord styling, but preserve their original spacing
-    content = content.replace(
-      /\[ch\](.*?)\[\/ch\]/g,
-      '<span class="chord">$1</span>'
-    );
-
-    // Identify and mark up sections like Verse, Chorus, etc.
-    // Make sure any existing HTML section headers are removed first
-    content = content.replace(/<div class="section-title">[^<]+<\/div>/g, "");
-
-    // Then convert all section markers from text format to HTML
-    const sectionRegex =
-      /\[(Verse|Chorus|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo)(?:\s*\d+|\s+[^\]]*)*\]/g;
-    content = content.replace(sectionRegex, (match) => {
-      // Extract the base section type (Verse, Chorus, etc.)
-      const sectionType = match.match(
-        /\[(Verse|Chorus|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo)/
-      )[1];
-      return `<div class="section-title">${sectionType}</div>`;
-    });
-
-    // Split content into lines to process for chord/lyric pairs
-    const lines = content.split("\n");
-    let processedHtml = "";
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Check if this line has chords (contains chord spans)
-      const hasChords = line.includes('<span class="chord">');
-
-      if (hasChords) {
-        // Preserve whitespace in chord lines for positioning
-        processedHtml += `<div class="chord-line" style="white-space: pre">${line}</div>`;
-      } else if (line.trim() === "") {
-        // Empty line becomes a spacer
-        processedHtml += '<div class="spacer"></div>';
-      } else {
-        // Regular lyrics line
-        processedHtml += `<div class="lyric-line">${line}</div>`;
-      }
+    if (window.songRender && typeof window.songRender.renderSongToContainer === "function") {
+      window.songRender.renderSongToContainer(song, songContent);
+    } else {
+      songContent.replaceChildren();
+      const fallback = document.createElement("div");
+      fallback.className = "song-body";
+      fallback.textContent = song.content || "";
+      songContent.appendChild(fallback);
     }
-
-    // Add the formatted content to the song content div
-    const contentDiv = document.createElement("div");
-    contentDiv.classList.add("song-body");
-    contentDiv.innerHTML = processedHtml;
-    songContent.appendChild(contentDiv);
 
     // Safely scroll to the top of the content if teleprompter exists
     if (teleprompter) {
