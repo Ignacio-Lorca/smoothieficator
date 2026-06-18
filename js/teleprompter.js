@@ -242,6 +242,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  window.applyTeleprompterZoom = updateZoom;
+
   // Save current zoom level for the displayed song
   function saveZoomLevelForCurrentSong() {
     // Get current song info
@@ -1016,43 +1018,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       case "A":
       case "a":
-        // Toggle extraction dropdown
         e.preventDefault();
-        const extractDropdownBtn = document.querySelector(
-          "#extract-dropdown .dropdown-button"
-        );
-        if (extractDropdownBtn) {
-          extractDropdownBtn.click(); // Trigger the click event handler directly
-          return;
-        }
-
-        // Fallback to the old method if the button isn't found
-        const extractDropdownContent = document.querySelector(
-          "#extract-dropdown .dropdown-content"
-        );
-        if (extractDropdownContent) {
-          extractDropdownContent.classList.toggle("hidden");
-          // Close other dropdowns
-          const savedSongsDropdown = document.querySelector(
-            "#songs-dropdown .dropdown-content"
-          );
-          if (
-            savedSongsDropdown &&
-            !savedSongsDropdown.classList.contains("hidden")
-          ) {
-            savedSongsDropdown.classList.add("hidden");
-          }
-
-          // Close import/export dropdown
-          const importExportDropdown = document.querySelector(
-            "#import-export-dropdown .dropdown-content"
-          );
-          if (
-            importExportDropdown &&
-            !importExportDropdown.classList.contains("hidden")
-          ) {
-            importExportDropdown.classList.add("hidden");
-          }
+        if (typeof window.openToolsMenu === "function") {
+          window.openToolsMenu();
+        } else {
+          const toolsMenuBtn = document.getElementById("tools-menu-button");
+          if (toolsMenuBtn) toolsMenuBtn.click();
         }
         break;
 
@@ -1086,12 +1057,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       case "I":
       case "i":
-        // Toggle import/export dropdown
         e.preventDefault();
-        // Directly click the import-export button instead of just toggling the dropdown
-        const importExportBtn = document.getElementById("import-export-button");
-        if (importExportBtn) {
-          importExportBtn.click(); // This will trigger the click event handler
+        if (typeof window.openToolsMenu === "function") {
+          window.openToolsMenu({ scrollToImport: true });
+        } else {
+          const toolsMenuBtn = document.getElementById("tools-menu-button");
+          if (toolsMenuBtn) toolsMenuBtn.click();
         }
         break;
 

@@ -18,20 +18,50 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Dropdown toggle
-  const extractDropdownBtn = document.querySelector(
-    "#extract-dropdown .dropdown-button"
-  );
-  const extractDropdownContent = document.querySelector(
-    "#extract-dropdown .dropdown-content"
-  );
+  // Tools menu (hamburger) toggle
+  const toolsMenuBtn = document.getElementById("tools-menu-button");
+  const toolsMenuContent = document.getElementById("tools-menu-content");
 
-  if (extractDropdownBtn && extractDropdownContent) {
-    extractDropdownBtn.addEventListener("click", (e) => {
+  function closeToolsMenu() {
+    if (toolsMenuContent) {
+      toolsMenuContent.classList.add("hidden");
+    }
+  }
+
+  window.openToolsMenu = function (options = {}) {
+    if (!toolsMenuContent) return;
+    toolsMenuContent.classList.remove("hidden");
+
+    const savedSongsDropdown = document.querySelector(
+      "#songs-dropdown .dropdown-content"
+    );
+    if (
+      savedSongsDropdown &&
+      !savedSongsDropdown.classList.contains("hidden")
+    ) {
+      savedSongsDropdown.classList.add("hidden");
+    }
+
+    const shortcutsPopup = document.getElementById("shortcuts-popup");
+    if (shortcutsPopup && !shortcutsPopup.classList.contains("hidden")) {
+      shortcutsPopup.classList.add("hidden");
+    }
+
+    if (options.scrollToImport) {
+      const importSection = document.getElementById("import-export-dropdown");
+      if (importSection) {
+        importSection.scrollIntoView({ block: "nearest" });
+      }
+    }
+  };
+
+  window.closeToolsMenu = closeToolsMenu;
+
+  if (toolsMenuBtn && toolsMenuContent) {
+    toolsMenuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      extractDropdownContent.classList.toggle("hidden");
+      toolsMenuContent.classList.toggle("hidden");
 
-      // Close other dropdowns
       const savedSongsDropdown = document.querySelector(
         "#songs-dropdown .dropdown-content"
       );
@@ -42,7 +72,6 @@ document.addEventListener("DOMContentLoaded", function () {
         savedSongsDropdown.classList.add("hidden");
       }
 
-      // Close shortcuts popup if open
       const shortcutsPopup = document.getElementById("shortcuts-popup");
       if (shortcutsPopup && !shortcutsPopup.classList.contains("hidden")) {
         shortcutsPopup.classList.add("hidden");
@@ -191,13 +220,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
 
-      // Hide the dropdown after clicking the button
-      const extractDropdownContent = document.querySelector(
-        "#extract-dropdown .dropdown-content"
-      );
-      if (extractDropdownContent) {
-        extractDropdownContent.classList.add("hidden");
-      }
+      // Hide the tools menu after clicking the button
+      closeToolsMenu();
     });
   }
 
@@ -225,13 +249,8 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("song-artist").value = "";
       document.getElementById("song-content-input").value = "";
 
-      // Hide the dropdown after creating the song
-      const extractDropdownContent = document.querySelector(
-        "#extract-dropdown .dropdown-content"
-      );
-      if (extractDropdownContent) {
-        extractDropdownContent.classList.add("hidden");
-      }
+      // Hide the tools menu after creating the song
+      closeToolsMenu();
     });
   }
 

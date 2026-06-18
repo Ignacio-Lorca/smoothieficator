@@ -60,20 +60,20 @@
 
   function setMissingSongSyncStatus(songId) {
     const shortId = (songId || "").toString().slice(0, 20);
-    setTransportSyncStatus(`Sync: Song not found (${shortId})`, "warning");
+    setTransportSyncStatus(`Song missing on this device (${shortId})`, "warning");
   }
 
   function setTransportControlStatus(state) {
     if (state === "taking") {
-      setTransportSyncStatus("Sync: Taking control...", "saving");
+      setTransportSyncStatus("Taking control…", "saving");
       return;
     }
     if (state === "acquired") {
-      setTransportSyncStatus("Sync: Control acquired", "ok");
+      setTransportSyncStatus("You have control", "ok");
       return;
     }
     if (state === "following") {
-      setTransportSyncStatus("Sync: Following controller", "warning");
+      setTransportSyncStatus("Following another device", "warning");
     }
   }
 
@@ -81,7 +81,7 @@
     const { controller, timer } = withTimeout(REQUEST_TIMEOUT_MS);
 
     try {
-      setSyncStatus("Syncing...", "saving");
+      setSyncStatus("Syncing library…", "saving");
 
       const response = await fetch(REMOTE_ENDPOINT, {
         method: "GET",
@@ -97,11 +97,11 @@
       const payload = await response.json();
       const songs = normalizeSongs(payload);
       writeLocalCache(songs);
-      setSyncStatus("Synced", "ok");
+      setSyncStatus("Library synced", "ok");
       return songs;
     } catch (error) {
       console.warn("Remote load failed, using local cache.", error);
-      setSyncStatus("Offline: using local cache", "warning");
+      setSyncStatus("Offline — local cache only", "warning");
       return readLocalCache();
     } finally {
       clearTimeout(timer);
@@ -116,7 +116,7 @@
     };
 
     writeLocalCache(songsToSave);
-    setSyncStatus("Saving...", "saving");
+    setSyncStatus("Saving library…", "saving");
 
     const { controller, timer } = withTimeout(REQUEST_TIMEOUT_MS);
     try {
@@ -134,11 +134,11 @@
         throw new Error(`Remote save failed (${response.status})`);
       }
 
-      setSyncStatus("Synced", "ok");
+      setSyncStatus("Library synced", "ok");
       return true;
     } catch (error) {
       console.warn("Remote save failed, local cache updated only.", error);
-      setSyncStatus("Save failed: local only", "error");
+      setSyncStatus("Save failed — local only", "error");
       return false;
     } finally {
       clearTimeout(timer);
@@ -161,11 +161,11 @@
       }
 
       const payload = await response.json();
-      setTransportSyncStatus("Sync: Live", "ok");
+      setTransportSyncStatus("Scroll sync live", "ok");
       return payload;
     } catch (error) {
       console.warn("Transport load failed.", error);
-      setTransportSyncStatus("Sync: Reconnecting", "warning");
+      setTransportSyncStatus("Reconnecting scroll sync…", "warning");
       return null;
     } finally {
       clearTimeout(timer);
@@ -200,14 +200,14 @@
         throw err;
       }
 
-      setTransportSyncStatus("Sync: Live", "ok");
+      setTransportSyncStatus("Scroll sync live", "ok");
       return payload || { ok: true };
     } catch (error) {
       console.warn("Transport save failed.", error);
       if (error && error.statusCode === 409) {
-        setTransportSyncStatus("Sync: Following conductor", "warning");
+        setTransportSyncStatus("Following another device", "warning");
       } else {
-        setTransportSyncStatus("Sync: Lagging", "error");
+        setTransportSyncStatus("Scroll sync lagging", "error");
       }
       return null;
     } finally {

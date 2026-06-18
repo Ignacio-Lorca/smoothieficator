@@ -55,7 +55,9 @@
     const statusElement = document.getElementById("transport-role-status");
     if (!statusElement) return;
     statusElement.classList.remove("hidden");
-    statusElement.textContent = isConductor ? "Role: Conductor" : "Role: Follower";
+    statusElement.textContent = isConductor
+      ? "You are conducting"
+      : "Following another device";
     statusElement.dataset.state = isConductor ? "ok" : "warning";
   }
 
@@ -72,7 +74,7 @@
     if (!Number.isFinite(serverNowMs) || !Number.isFinite(updatedAtMs)) return;
     const stalenessMs = Math.max(0, serverNowMs - updatedAtMs);
     if (stalenessMs > 2000) {
-      window.songStorage.setTransportSyncStatus("Sync: Degraded", "degraded");
+      window.songStorage.setTransportSyncStatus("Scroll sync degraded", "degraded");
     }
   }
 

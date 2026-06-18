@@ -445,26 +445,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Show fullscreen view instead of dropdown
       showFullscreenSavedSongs();
 
-      // Close any open dropdowns first
-      const extractDropdownContent = document.querySelector(
-        "#extract-dropdown .dropdown-content"
-      );
-      if (
-        extractDropdownContent &&
-        !extractDropdownContent.classList.contains("hidden")
-      ) {
-        extractDropdownContent.classList.add("hidden");
-      }
-
-      // Close import/export dropdown
-      const importExportDropdown = document.querySelector(
-        "#import-export-dropdown .dropdown-content"
-      );
-      if (
-        importExportDropdown &&
-        !importExportDropdown.classList.contains("hidden")
-      ) {
-        importExportDropdown.classList.add("hidden");
+      // Close tools menu if open
+      if (typeof window.closeToolsMenu === "function") {
+        window.closeToolsMenu();
+      } else {
+        const toolsMenu = document.getElementById("tools-menu-content");
+        if (toolsMenu) toolsMenu.classList.add("hidden");
       }
 
       // Close shortcuts popup if open
@@ -600,58 +586,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Import/Export functionality
-  const importExportBtn = document.getElementById("import-export-button");
-  const importExportDropdownContent = document.querySelector(
-    "#import-export-dropdown .dropdown-content"
-  );
   const exportSongsBtn = document.getElementById("export-songs-button");
   const importSongsBtn = document.getElementById("import-songs-button");
   const importFileInput = document.getElementById("import-file-input");
   const importStatus = document.getElementById("import-status");
-
-  if (importExportBtn && importExportDropdownContent) {
-    importExportBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      importExportDropdownContent.classList.toggle("hidden");
-
-      // Close other dropdowns
-      const otherDropdowns = [
-        document.querySelector("#songs-dropdown .dropdown-content"),
-        document.querySelector("#extract-dropdown .dropdown-content"),
-      ];
-
-      otherDropdowns.forEach((dropdown) => {
-        if (dropdown && !dropdown.classList.contains("hidden")) {
-          dropdown.classList.add("hidden");
-        }
-      });
-
-      // Close shortcuts popup if open
-      const shortcutsPopup = document.getElementById("shortcuts-popup");
-      if (shortcutsPopup && !shortcutsPopup.classList.contains("hidden")) {
-        shortcutsPopup.classList.add("hidden");
-      }
-    });
-  }
-
-  // Add event listeners to close import/export when other dropdowns are opened
-  const otherDropdownButtons = [
-    document.getElementById("saved-songs-button"),
-    document.querySelector("#extract-dropdown .dropdown-button"),
-  ];
-
-  otherDropdownButtons.forEach((button) => {
-    if (button) {
-      button.addEventListener("click", () => {
-        if (
-          importExportDropdownContent &&
-          !importExportDropdownContent.classList.contains("hidden")
-        ) {
-          importExportDropdownContent.classList.add("hidden");
-        }
-      });
-    }
-  });
 
   // Export songs functionality
   if (exportSongsBtn) {
@@ -682,8 +620,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         URL.revokeObjectURL(url);
       }, 100);
 
-      // Hide dropdown after export
-      importExportDropdownContent.classList.add("hidden");
+      // Hide tools menu after export
+      if (typeof window.closeToolsMenu === "function") {
+        window.closeToolsMenu();
+      }
     });
   }
 

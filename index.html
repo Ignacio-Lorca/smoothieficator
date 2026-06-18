@@ -23,105 +23,37 @@
           <h1>Smoothieficator</h1>
         </div>
 
-        <!-- Song extraction dropdown -->
-        <div class="dropdown" id="extract-dropdown">
-          <button class="dropdown-button">
-            <i class="fas fa-music"></i> Add Song
-            <i class="fas fa-caret-down"></i>
+        <div class="song-nav-cluster">
+          <button
+            id="prev-song"
+            class="song-nav-icon-button"
+            type="button"
+            title="Previous song"
+            aria-label="Previous song"
+          >
+            <i class="fas fa-step-backward"></i>
           </button>
-          <div class="dropdown-content hidden">
-            <div class="tabs">
-              <button class="tab-button active" data-tab="copy-paste">
-                Copy-Paste
-              </button>
-              <button class="tab-button" data-tab="manual-method">
-                Manual
-              </button>
-            </div>
 
-            <div id="copy-paste-content">
-              <button id="extract-button" class="primary-button compact-button">
-                Add Song from Clipboard
-              </button>
-            </div>
-
-            <div class="form-container hidden" id="manual-method-content">
-              <div class="form-group">
-                <input
-                  type="text"
-                  id="song-title"
-                  placeholder="Enter song title"
-                />
+          <div class="dropdown" id="songs-dropdown">
+            <button class="dropdown-button" type="button" id="saved-songs-button">
+              Saved Songs
+            </button>
+            <div class="dropdown-content hidden">
+              <div id="saved-songs-container">
+                <!-- This will be populated by JavaScript -->
               </div>
-              <div class="form-group">
-                <input
-                  type="text"
-                  id="song-artist"
-                  placeholder="Enter artist name"
-                />
-              </div>
-              <div class="form-group">
-                <textarea
-                  id="song-content-input"
-                  rows="4"
-                  placeholder="Paste chords and lyrics here"
-                ></textarea>
-              </div>
-              <button id="manual-extract-button" class="primary-button">
-                Create Song
-              </button>
             </div>
           </div>
-        </div>
 
-        <!-- Saved songs dropdown -->
-        <div class="dropdown" id="songs-dropdown">
-          <button class="dropdown-button" id="saved-songs-button">
-            <i class="fas fa-list"></i> Saved Songs
-            <i class="fas fa-caret-down"></i>
+          <button
+            id="next-song"
+            class="song-nav-icon-button"
+            type="button"
+            title="Next song"
+            aria-label="Next song"
+          >
+            <i class="fas fa-step-forward"></i>
           </button>
-          <div class="dropdown-content hidden">
-            <div id="saved-songs-container">
-              <!-- This will be populated by JavaScript -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Import/Export dropdown -->
-        <div class="dropdown" id="import-export-dropdown">
-          <button class="dropdown-button" id="import-export-button">
-            <i class="fas fa-file-export"></i> Import/Export
-            <i class="fas fa-caret-down"></i>
-          </button>
-          <div class="dropdown-content hidden">
-            <div id="import-export-container">
-              <div class="button-row">
-                <button
-                  id="export-songs-button"
-                  class="primary-button compact-button"
-                >
-                  <i class="fas fa-download"></i> Export Songs
-                </button>
-                <button
-                  id="import-songs-button"
-                  class="primary-button compact-button"
-                >
-                  <i class="fas fa-upload"></i> Import Songs
-                </button>
-              </div>
-              <input
-                type="file"
-                id="import-file-input"
-                accept=".json"
-                style="display: none"
-              />
-              <div
-                id="import-status"
-                class="hidden"
-                style="margin-top: 10px; font-size: 0.9rem"
-              ></div>
-            </div>
-          </div>
         </div>
 
         <!-- Teleprompter controls section -->
@@ -184,29 +116,132 @@
               </li>
               <li><kbd>Q</kbd>/<kbd>W</kbd> - Decrease/increase zoom</li>
               <li><kbd>←</kbd><kbd>→</kbd> - Previous/Next song</li>
-              <li><kbd>A</kbd> - Add song menu</li>
-              <li><kbd>S</kbd> - Saved songs menu</li>
-              <li><kbd>I</kbd> - Import/Export menu</li>
+              <li><kbd>A</kbd> - Tools menu (Add song)</li>
+              <li><kbd>S</kbd> - Saved songs browser</li>
+              <li><kbd>I</kbd> - Tools menu (Import/Export)</li>
               <li><kbd>K</kbd> - Show shortcuts</li>
             </ul>
           </div>
         </div>
 
-        <!-- Song navigation controls -->
-        <div class="song-navigation">
-          <button id="prev-song" title="Previous Song">
-            <i class="fas fa-step-backward"></i>
-          </button>
-          <button id="next-song" title="Next Song">
-            <i class="fas fa-step-forward"></i>
-          </button>
+        <div class="sync-status-panel" title="Multi-device sync status">
+          <div class="sync-status-row">
+            <span class="sync-status-label">Songs</span>
+            <span id="sync-status" class="sync-status-value hidden"
+              >Syncing...</span
+            >
+          </div>
+          <div class="sync-status-row">
+            <span class="sync-status-label">Scroll</span>
+            <span id="transport-sync-status" class="sync-status-value hidden"
+              >Reconnecting scroll sync…</span
+            >
+          </div>
+          <div class="sync-status-row">
+            <span class="sync-status-label">Control</span>
+            <span id="transport-role-status" class="sync-status-value hidden"
+              >Following another device</span
+            >
+          </div>
         </div>
-        <div id="sync-status" class="sync-status hidden">Syncing...</div>
-        <div id="transport-sync-status" class="sync-status hidden">
-          Sync: Reconnecting
-        </div>
-        <div id="transport-role-status" class="sync-status hidden">
-          Role: Follower
+
+        <div class="dropdown tools-menu-dropdown" id="tools-menu-dropdown">
+          <button
+            type="button"
+            class="dropdown-button hamburger-menu-button"
+            id="tools-menu-button"
+            title="Add song, import, export, show chords"
+            aria-label="Tools menu"
+          >
+            <i class="fas fa-bars"></i>
+          </button>
+          <div class="dropdown-content tools-menu-content hidden" id="tools-menu-content">
+            <section class="tools-menu-section">
+              <label
+                class="chord-diagram-toggle"
+                title="Show guitar chord fingering diagrams next to chord names"
+              >
+                <input type="checkbox" id="show-chord-diagrams" checked />
+                Show Chords
+              </label>
+            </section>
+
+            <section id="extract-dropdown" class="tools-menu-section">
+              <h3 class="tools-menu-heading">Add Song</h3>
+              <div class="tabs">
+                <button class="tab-button active" data-tab="copy-paste">
+                  Copy-Paste
+                </button>
+                <button class="tab-button" data-tab="manual-method">
+                  Manual
+                </button>
+              </div>
+
+              <div id="copy-paste-content">
+                <button id="extract-button" class="primary-button compact-button">
+                  Add Song from Clipboard
+                </button>
+              </div>
+
+              <div class="form-container hidden" id="manual-method-content">
+                <div class="form-group">
+                  <input
+                    type="text"
+                    id="song-title"
+                    placeholder="Enter song title"
+                  />
+                </div>
+                <div class="form-group">
+                  <input
+                    type="text"
+                    id="song-artist"
+                    placeholder="Enter artist name"
+                  />
+                </div>
+                <div class="form-group">
+                  <textarea
+                    id="song-content-input"
+                    rows="4"
+                    placeholder="Paste chords and lyrics here"
+                  ></textarea>
+                </div>
+                <button id="manual-extract-button" class="primary-button">
+                  Create Song
+                </button>
+              </div>
+            </section>
+
+            <section id="import-export-dropdown" class="tools-menu-section">
+              <h3 class="tools-menu-heading">Import / Export</h3>
+              <div id="import-export-container">
+                <div class="button-row">
+                  <button
+                    id="export-songs-button"
+                    class="primary-button compact-button"
+                  >
+                    Export Songs
+                  </button>
+                  <button
+                    id="import-songs-button"
+                    class="primary-button compact-button"
+                  >
+                    Import Songs
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  id="import-file-input"
+                  accept=".json"
+                  style="display: none"
+                />
+                <div
+                  id="import-status"
+                  class="hidden"
+                  style="margin-top: 10px; font-size: 0.9rem"
+                ></div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
@@ -369,6 +404,7 @@
     </script>
     <script src="js/storage.js"></script>
     <script src="js/transport-sync.js"></script>
+    <script src="js/chord-diagrams.js"></script>
     <script src="js/song-render.js"></script>
     <script src="js/scraper.js"></script>
     <script src="js/teleprompter.js"></script>

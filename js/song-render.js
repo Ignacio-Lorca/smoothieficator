@@ -27,6 +27,11 @@
     line.className = "chord-line";
     line.style.whiteSpace = "pre";
 
+    const showDiagrams =
+      window.chordDiagrams &&
+      typeof window.chordDiagrams.isEnabled === "function" &&
+      window.chordDiagrams.isEnabled();
+
     const chordRegex = /\[ch\](.*?)\[\/ch\]/g;
     let lastIndex = 0;
     let match;
@@ -38,7 +43,23 @@
       const chordSpan = document.createElement("span");
       chordSpan.className = "chord";
       chordSpan.textContent = match[1];
-      line.appendChild(chordSpan);
+
+      if (showDiagrams) {
+        const block = document.createElement("span");
+        block.className = "chord-block";
+        block.appendChild(chordSpan);
+        if (
+          window.chordDiagrams &&
+          typeof window.chordDiagrams.createMiniDiagram === "function"
+        ) {
+          const diagram = window.chordDiagrams.createMiniDiagram(match[1]);
+          if (diagram) block.appendChild(diagram);
+        }
+        line.appendChild(block);
+      } else {
+        line.appendChild(chordSpan);
+      }
+
       lastIndex = chordRegex.lastIndex;
     }
 
@@ -108,6 +129,15 @@
     lineEl.childNodes.forEach((node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         result += node.textContent;
+      } else if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        node.classList &&
+        node.classList.contains("chord-block")
+      ) {
+        const chordEl = node.querySelector(".chord");
+        if (chordEl) {
+          result += `[ch]${chordEl.textContent}[/ch]`;
+        }
       } else if (
         node.nodeType === Node.ELEMENT_NODE &&
         node.classList &&
