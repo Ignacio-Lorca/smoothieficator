@@ -125,9 +125,9 @@
     s = s.replace(/maj9/gi, "maj9");
     s = s.replace(/maj7/gi, "maj7");
     s = s.replace(/maj/gi, "");
-    s = s.replace(/M9$/i, "maj9");
-    s = s.replace(/M7$/i, "maj7");
-    s = s.replace(/M$/i, "");
+    s = s.replace(/M9$/, "maj9");
+    s = s.replace(/M7$/, "maj7");
+    s = s.replace(/M$/, "");
 
     if (ENHARMONIC[s]) {
       s = ENHARMONIC[s];
@@ -149,7 +149,6 @@
       key.replace(/add9$/, ""),
       key.replace(/6$/, ""),
       key.replace(/aug$/, ""),
-      key.match(/^([A-G][#b]?m?)/)?.[1],
     ].filter(Boolean);
 
     for (const alt of fallbacks) {
