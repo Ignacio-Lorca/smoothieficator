@@ -1023,25 +1023,47 @@ kbd {
 
 /* Song Header Styling — pinned above scrolling lyrics plane */
 .song-header {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
   text-align: center;
   margin-bottom: 0;
-  padding: 0.75rem 1rem 0.85rem;
+  padding: 0.55rem 1rem;
   position: relative;
   z-index: 5;
   flex-shrink: 0;
   background-color: #121212;
   border-bottom: 1px solid #333;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .song-header h2 {
   color: #ffc107;
-  margin-bottom: 0.2rem;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: bold;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .song-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: normal;
   opacity: 0.8;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Edit Mode Notice Bar Styles */

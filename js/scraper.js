@@ -70,10 +70,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     await migrateSongSyncIdsIfNeeded();
   }
 
-  // Play count tracking
-  let playCountTimer = null;
-  let currentSongForPlayCount = null;
-  let playCountTimestamp = null;
+  // Pass-based play count (arm on scroll start; credit at ≥30% or end)
+  let playPassArmed = false;
+  let playPassCredited = false;
+  let activePlaySong = null;
 
   // Make a function to update the localSongs cache from teleprompter.js edit mode
   window.updateLocalSongsCache = function (updatedSongs) {
@@ -103,46 +103,118 @@ document.addEventListener("DOMContentLoaded", async () => {
     errorLoad.classList.remove("hidden");
   }
 
-  // Increment play count for a song
-  async function incrementPlayCount(song) {
-    const entries = Object.entries(localSongs);
-    const match = entries.find(
-      ([id, savedSong]) =>
-        savedSong.title === song.title && savedSong.artist === song.artist
-    );
-
-    if (match) {
-      const [id, savedSong] = match;
-      // Initialize playCount if it doesn't exist
-      if (!savedSong.playCount) {
-        savedSong.playCount = 0;
-      }
-      savedSong.playCount++;
-      localSongs[id] = savedSong;
-      await persistSongs();
-
-      // Update the in-memory cache
-      console.log(
-        `Play count incremented for "${song.title}": ${savedSong.playCount}`
+  function findStoredSongEntry(song) {
+    if (!song) return null;
+    const syncId =
+      song.syncId ||
+      window.currentDisplayedSongId ||
+      (song.__songId ? localSongs[song.__songId]?.syncId || song.__songId : null);
+    if (syncId) {
+      const bySync = Object.entries(localSongs).find(
+        ([id, savedSong]) => savedSong.syncId === syncId || id === syncId
       );
+      if (bySync) return bySync;
+    }
+    if (song.title && song.artist) {
+      return (
+        Object.entries(localSongs).find(
+          ([, savedSong]) =>
+            savedSong.title === song.title && savedSong.artist === song.artist
+        ) || null
+      );
+    }
+    return null;
+  }
+
+  function canCreditPlayCount() {
+    if (
+      !window.transportSync ||
+      typeof window.transportSync.getIsConductor !== "function"
+    ) {
+      return true;
+    }
+    return !!window.transportSync.getIsConductor();
+  }
+
+  async function creditPlay() {
+    if (playPassCredited || !playPassArmed) return;
+    if (!canCreditPlayCount()) return;
+
+    const song = activePlaySong || window.currentDisplayedSong;
+    const match = findStoredSongEntry(song);
+    if (!match) return;
+
+    const [id, savedSong] = match;
+    savedSong.playCount = (savedSong.playCount || 0) + 1;
+    savedSong.lastPlayedAt = new Date().toISOString();
+    localSongs[id] = savedSong;
+    playPassCredited = true;
+
+    try {
+      await persistSongs();
+    } catch (error) {
+      console.error("Failed to persist play count:", error);
     }
   }
 
-  function displaySong(song) {
-    // Stop any existing play count timer
-    if (playCountTimer) {
-      clearTimeout(playCountTimer);
-      playCountTimer = null;
-    }
+  function onSongDisplayedForPlayCount(song) {
+    activePlaySong = song || null;
+    playPassArmed = false;
+    playPassCredited = false;
+  }
 
-    // Start new play count timer (2 minutes)
-    currentSongForPlayCount = song;
-    playCountTimestamp = new Date().toISOString();
-    playCountTimer = setTimeout(() => {
-      incrementPlayCount(song).catch((error) => {
-        console.error("Failed to increment play count:", error);
-      });
-    }, 120000); // 2 minutes
+  function armPlayPass() {
+    if (playPassCredited) return;
+    playPassArmed = true;
+  }
+
+  function noteTimelineProgress(ratio) {
+    if (!playPassArmed || playPassCredited) return;
+    if (!Number.isFinite(ratio) || ratio < 0.3) return;
+    creditPlay().catch((error) => {
+      console.error("Failed to credit play count:", error);
+    });
+  }
+
+  function noteReachedEnd() {
+    if (!playPassArmed || playPassCredited) return;
+    creditPlay().catch((error) => {
+      console.error("Failed to credit play count:", error);
+    });
+  }
+
+  function onTimelineReset() {
+    // New pass eligible after returning to top (same song can count again)
+    playPassArmed = false;
+    playPassCredited = false;
+  }
+
+  window.songPlayCount = {
+    onSongDisplayed: onSongDisplayedForPlayCount,
+    armPlayPass,
+    noteTimelineProgress,
+    noteReachedEnd,
+    onTimelineReset,
+  };
+
+  function appendPlayMeta(songInfo, song) {
+    const playCount = song.playCount || 0;
+    if (playCount <= 0) return;
+    const playCountDiv = document.createElement("div");
+    playCountDiv.classList.add("fullscreen-songs-playcount");
+    let text = `Played ${playCount} time${playCount !== 1 ? "s" : ""}`;
+    if (song.lastPlayedAt) {
+      const playedDate = new Date(song.lastPlayedAt);
+      if (!Number.isNaN(playedDate.getTime())) {
+        text += ` · Last: ${playedDate.toLocaleDateString()}`;
+      }
+    }
+    playCountDiv.textContent = text;
+    songInfo.appendChild(playCountDiv);
+  }
+
+  function displaySong(song) {
+    onSongDisplayedForPlayCount(song);
 
     if (window.songRender && typeof window.songRender.renderSongToContainer === "function") {
       window.songRender.renderSongToContainer(song, songContent);
@@ -725,6 +797,18 @@ document.addEventListener("DOMContentLoaded", async () => {
               const importedPlayCount = song.playCount || 0;
               // Keep the higher play count
               song.playCount = Math.max(existingPlayCount, importedPlayCount);
+              // Keep the newer lastPlayedAt
+              const existingLast = existingSong.lastPlayedAt || "";
+              const importedLast = song.lastPlayedAt || "";
+              const newerLast = [existingLast, importedLast]
+                .filter(Boolean)
+                .sort()
+                .pop();
+              if (newerLast) {
+                song.lastPlayedAt = newerLast;
+              } else {
+                delete song.lastPlayedAt;
+              }
               // Preserve the original dateAdded (keep the earlier one)
               if (existingSong.dateAdded) {
                 song.dateAdded = existingSong.dateAdded;
@@ -811,6 +895,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     { id: "artistZA", label: "Artist (Ö-A)" },
     { id: "playCount", label: "Most Played" },
     { id: "leastPlayed", label: "Least Played" },
+    { id: "recentlyPlayed", label: "Recently Played" },
   ];
 
   // Function to sort songs based on current sort mode
@@ -850,6 +935,16 @@ document.addEventListener("DOMContentLoaded", async () => {
           const countA = a[1].playCount || 0;
           const countB = b[1].playCount || 0;
           return countA - countB; // Least played first
+        });
+        break;
+      case "recentlyPlayed":
+        sorted.sort((a, b) => {
+          const dateA = a[1].lastPlayedAt || "";
+          const dateB = b[1].lastPlayedAt || "";
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1; // missing dates last
+          if (!dateB) return -1;
+          return dateB.localeCompare(dateA);
         });
         break;
       case "oldest":
@@ -1046,21 +1141,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         songArtist.classList.add("fullscreen-songs-artist");
         songArtist.textContent = `by ${song.artist}`;
 
-        // Add play count if it exists and is greater than 0
-        const playCount = song.playCount || 0;
-        if (playCount > 0) {
-          const playCountDiv = document.createElement("div");
-          playCountDiv.classList.add("fullscreen-songs-playcount");
-          playCountDiv.textContent = `Played ${playCount} time${
-            playCount !== 1 ? "s" : ""
-          }`;
-          songInfo.appendChild(songTitle);
-          songInfo.appendChild(songArtist);
-          songInfo.appendChild(playCountDiv);
-        } else {
-          songInfo.appendChild(songTitle);
-          songInfo.appendChild(songArtist);
-        }
+        songInfo.appendChild(songTitle);
+        songInfo.appendChild(songArtist);
+        appendPlayMeta(songInfo, song);
 
         // Actions
         const actions = document.createElement("div");
@@ -1311,21 +1394,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       songArtist.classList.add("fullscreen-songs-artist");
       songArtist.textContent = `by ${song.artist}`;
 
-      // Add play count if it exists and is greater than 0
-      const playCount = song.playCount || 0;
-      if (playCount > 0) {
-        const playCountDiv = document.createElement("div");
-        playCountDiv.classList.add("fullscreen-songs-playcount");
-        playCountDiv.textContent = `Played ${playCount} time${
-          playCount !== 1 ? "s" : ""
-        }`;
-        songInfo.appendChild(songTitle);
-        songInfo.appendChild(songArtist);
-        songInfo.appendChild(playCountDiv);
-      } else {
-        songInfo.appendChild(songTitle);
-        songInfo.appendChild(songArtist);
-      }
+      songInfo.appendChild(songTitle);
+      songInfo.appendChild(songArtist);
+      appendPlayMeta(songInfo, song);
 
       // Actions
       const actions = document.createElement("div");

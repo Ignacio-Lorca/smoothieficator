@@ -64,6 +64,8 @@ document.addEventListener("DOMContentLoaded", () => {
     return Math.max(0, Math.min(maxTimelinePosition(), positionPx));
   }
 
+  let lastPlayProgressRatio = 0;
+
   function setTimelinePosition(positionPx) {
     timelinePositionPx = clampTimelinePosition(positionPx);
     const plane = getScrollPlane();
@@ -73,6 +75,21 @@ document.addEventListener("DOMContentLoaded", () => {
     // Keep native scroll neutral so transform is the single render path.
     if (teleprompter.scrollTop !== 0) {
       teleprompter.scrollTop = 0;
+    }
+
+    if (window.songPlayCount && !isEditMode) {
+      const maxPos = maxTimelinePosition();
+      const ratio = maxPos > 0 ? timelinePositionPx / maxPos : 0;
+      // Seeking back near top after progress → new pass can count again
+      if (lastPlayProgressRatio > 0.05 && ratio <= 0.01) {
+        window.songPlayCount.onTimelineReset();
+      } else if (
+        typeof window.songPlayCount.noteTimelineProgress === "function" &&
+        ratio > 0.01
+      ) {
+        window.songPlayCount.noteTimelineProgress(ratio);
+      }
+      lastPlayProgressRatio = ratio;
     }
   }
 
@@ -182,6 +199,13 @@ document.addEventListener("DOMContentLoaded", () => {
     startScrollBtn.classList.add("hidden");
     stopScrollBtn.classList.remove("hidden");
 
+    if (
+      window.songPlayCount &&
+      typeof window.songPlayCount.armPlayPass === "function"
+    ) {
+      window.songPlayCount.armPlayPass();
+    }
+
     transportAttempt("play", { isPlaying: true })
       .then((ok) => {
         if (!ok) {
@@ -189,6 +213,12 @@ document.addEventListener("DOMContentLoaded", () => {
           isScrolling = false;
           startScrollBtn.classList.remove("hidden");
           stopScrollBtn.classList.add("hidden");
+          if (
+            window.songPlayCount &&
+            typeof window.songPlayCount.onTimelineReset === "function"
+          ) {
+            window.songPlayCount.onTimelineReset();
+          }
         }
       })
       .catch((error) => {
@@ -215,9 +245,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Scroll to top
     setTimelinePosition(0);
+    if (
+      window.songPlayCount &&
+      typeof window.songPlayCount.onTimelineReset === "function"
+    ) {
+      window.songPlayCount.onTimelineReset();
+    }
+    lastPlayProgressRatio = 0;
     transportAttempt("seek", { isPlaying: false, positionPx: 0 }).catch((error) => {
       console.warn("Failed to publish reset state", error);
     });
+  }
+
+  function handleReachedEnd() {
+    if (
+      !isEditMode &&
+      window.songPlayCount &&
+      typeof window.songPlayCount.noteReachedEnd === "function"
+    ) {
+      window.songPlayCount.noteReachedEnd();
+    }
+    stopScrolling();
   }
 
   if (window.transportSync && typeof window.transportSync.init === "function") {
@@ -234,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
         isScrolling = !!value;
       },
       isEditMode: () => isEditMode,
-      onReachedEnd: () => stopScrolling(),
+      onReachedEnd: handleReachedEnd,
     });
     window.transportSync.attachGestureListeners(teleprompter);
   }
