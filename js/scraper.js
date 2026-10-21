@@ -963,6 +963,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const SORT_MODE_STORAGE_KEY = "songSortMode";
   const SEARCH_FILTER_STORAGE_KEY = "songSearchFilter";
   const sortModes = [
+    { id: "meatSmoothie", label: "Meat Smoothie" },
     { id: "newest", label: "Newest First" },
     { id: "oldest", label: "Oldest First" },
     { id: "songAZ", label: "Song Name (A-Ö)" },
@@ -973,6 +974,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     { id: "leastPlayed", label: "Least Played" },
     { id: "recentlyPlayed", label: "Recently Played" },
   ];
+
+  function isMeatSmoothieArtist(artist) {
+    return String(artist || "").trim().toLowerCase() === "meat smoothie";
+  }
+
+  function applySortModeFilters(entries, sortMode) {
+    if (sortMode !== "meatSmoothie") return entries;
+    return entries.filter(([, song]) => isMeatSmoothieArtist(song.artist));
+  }
 
   function readStoredSortMode() {
     try {
@@ -1019,6 +1029,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const sorted = [...songsArray]; // Create a copy to avoid mutating original
 
     switch (sortMode) {
+      case "meatSmoothie":
+        sorted.sort((a, b) =>
+          a[1].title.localeCompare(b[1].title, "fi", { sensitivity: "base" })
+        );
+        break;
       case "songAZ":
         sorted.sort((a, b) =>
           a[1].title.localeCompare(b[1].title, "fi", { sensitivity: "base" })
@@ -1088,12 +1103,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Get current search term
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
     
-    // Start with all songs
-    let songsToSort = allSongsData;
+    // Start with all songs, then sort-mode filters (e.g. Meat Smoothie)
+    let songsToSort = applySortModeFilters(allSongsData, currentSortMode);
     
     // Apply search filter if needed
     if (searchTerm) {
-      songsToSort = allSongsData.filter(([id, song]) => {
+      songsToSort = songsToSort.filter(([, song]) => {
         const titleMatch = song.title.toLowerCase().includes(searchTerm);
         const artistMatch = song.artist.toLowerCase().includes(searchTerm);
         return titleMatch || artistMatch;
@@ -1142,7 +1157,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Current song list for prev/next: sticky search filter + sticky sort
   function getSongsInSortOrder() {
-    let entries = Object.entries(localSongs);
+    let entries = applySortModeFilters(
+      Object.entries(localSongs),
+      currentSortMode
+    );
     const searchTerm = persistedSearchFilter.toLowerCase().trim();
     if (searchTerm) {
       entries = entries.filter(([, song]) => {
@@ -1270,12 +1288,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         "No songs saved yet. Add a song to get started!";
       content.appendChild(emptyMessage);
     } else {
-      // Store all songs data; apply sticky search + sort
+      // Store all songs data; apply sticky search + sort-mode filters
       allSongsData = savedSongsEntries;
-      let songsToSort = allSongsData;
+      let songsToSort = applySortModeFilters(allSongsData, currentSortMode);
       const searchTerm = persistedSearchFilter.toLowerCase().trim();
       if (searchTerm) {
-        songsToSort = allSongsData.filter(([, song]) => {
+        songsToSort = songsToSort.filter(([, song]) => {
           const titleMatch = song.title.toLowerCase().includes(searchTerm);
           const artistMatch = song.artist.toLowerCase().includes(searchTerm);
           return titleMatch || artistMatch;
