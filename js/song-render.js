@@ -25,7 +25,6 @@
   function appendChordLine(parent, lineText) {
     const line = document.createElement("div");
     line.className = "chord-line";
-    line.style.whiteSpace = "pre";
 
     const showDiagrams =
       window.chordDiagrams &&
@@ -89,6 +88,15 @@
     let content = normalizeContent(song.content);
     content = content.replace(LEGACY_SECTION_HTML, "");
 
+    // Viewport clips; scroll plane is content-height and receives translateY.
+    // (If the plane itself is flex-height-constrained, overflow is clipped and
+    // translating only moves the empty box off-screen.)
+    const scrollViewport = document.createElement("div");
+    scrollViewport.classList.add("song-scroll-viewport");
+
+    const scrollPlane = document.createElement("div");
+    scrollPlane.classList.add("song-scroll-plane");
+
     const body = document.createElement("div");
     body.classList.add("song-body");
 
@@ -96,13 +104,13 @@
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const sectionMatch = line.match(
-        /^\[(Verse|Chorus|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo)(?:\s*\d+|\s+[^\]]*)*\]$/
+        /^\[((?:Verse|Chorus|Bridge|Intro|Outro|Pre-Chorus|Interlude|Solo)(?:\s*\d+|\s+[^\]]*)*)\]$/
       );
 
       if (sectionMatch) {
         const sectionDiv = document.createElement("div");
         sectionDiv.className = "section-title";
-        sectionDiv.textContent = sectionMatch[1];
+        sectionDiv.textContent = sectionMatch[1].trim();
         body.appendChild(sectionDiv);
         continue;
       }
@@ -121,7 +129,23 @@
       }
     }
 
-    container.appendChild(body);
+    scrollPlane.appendChild(body);
+
+    // Lead-in space so last lyrics can scroll up; SONG END sits at the true end
+    // and maxTimelinePosition keeps it from leaving the viewport.
+    const endLeadIn = document.createElement("div");
+    endLeadIn.className = "song-end-lead-in";
+    endLeadIn.setAttribute("aria-hidden", "true");
+    scrollPlane.appendChild(endLeadIn);
+
+    const endMarker = document.createElement("div");
+    endMarker.className = "song-end-marker";
+    endMarker.textContent = "SONG END";
+    endMarker.setAttribute("role", "status");
+    scrollPlane.appendChild(endMarker);
+
+    scrollViewport.appendChild(scrollPlane);
+    container.appendChild(scrollViewport);
   }
 
   function chordLineToRaw(lineEl) {

@@ -121,6 +121,9 @@
       s = s.split("/")[0].trim();
     }
 
+    // Capitalize root letter (bm → Bm) while preserving # / b accidentals.
+    s = s.replace(/^([a-g])/, (letter) => letter.toUpperCase());
+
     s = s.replace(/min/gi, "m");
     s = s.replace(/maj9/gi, "maj9");
     s = s.replace(/maj7/gi, "maj7");
@@ -134,6 +137,24 @@
     }
 
     return s;
+  }
+
+  function resolveShapeForRender(shape) {
+    // Keep absolute frets; only adjust baseFret so renderMiniSvg's
+    // (fret - baseFret + 1) mapping fits the 4-fret window.
+    const frets = (shape.frets || []).map(String);
+    const fretted = frets
+      .map((f) => parseInt(f, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (fretted.length === 0) {
+      return { frets, baseFret: 1 };
+    }
+    const minFret = Math.min(...fretted);
+    const maxFret = Math.max(...fretted);
+    if (maxFret <= 4) {
+      return { frets, baseFret: 1 };
+    }
+    return { frets, baseFret: minFret };
   }
 
   function lookup(name) {
@@ -321,7 +342,7 @@
     const wrap = document.createElement("span");
     wrap.className = "chord-diagram";
     wrap.setAttribute("aria-hidden", "true");
-    wrap.appendChild(renderMiniSvg(shape));
+    wrap.appendChild(renderMiniSvg(resolveShapeForRender(shape)));
     return wrap;
   }
 
@@ -356,6 +377,10 @@
     window.songRender.renderSongToContainer(song, container);
     if (typeof window.applyTeleprompterZoom === "function") {
       window.applyTeleprompterZoom();
+    }
+    // Re-apply timeline transform to the new scroll plane after DOM rebuild.
+    if (typeof window.reapplyTimelinePosition === "function") {
+      window.reapplyTimelinePosition();
     }
   }
 

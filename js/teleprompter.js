@@ -32,9 +32,32 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentZoomLevel = 100; // Default zoom level in percentage
   let visualRafId = null;
 
+  function getScrollPlane() {
+    return (
+      songContent?.querySelector(".song-scroll-plane") ||
+      songContent?.querySelector(".song-body") ||
+      songContent
+    );
+  }
+
   function maxTimelinePosition() {
-    const contentHeight = songContent?.scrollHeight || teleprompter.scrollHeight;
-    return Math.max(0, contentHeight - teleprompter.clientHeight);
+    const plane = getScrollPlane();
+    const viewport =
+      songContent?.querySelector(".song-scroll-viewport") || teleprompter;
+    const endMarker = plane?.querySelector(".song-end-marker");
+    const available = viewport?.clientHeight || teleprompter.clientHeight;
+
+    // Cap scroll so SONG END stays fully visible at the bottom of the viewport
+    // (cannot be translated up and off-screen).
+    if (plane && endMarker && available > 0) {
+      const markerBottomInPlane =
+        endMarker.offsetTop + endMarker.offsetHeight;
+      return Math.max(0, markerBottomInPlane - available);
+    }
+
+    const contentHeight =
+      plane?.scrollHeight || songContent?.scrollHeight || teleprompter.scrollHeight;
+    return Math.max(0, contentHeight - available);
   }
 
   function clampTimelinePosition(positionPx) {
@@ -43,8 +66,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function setTimelinePosition(positionPx) {
     timelinePositionPx = clampTimelinePosition(positionPx);
-    if (songContent) {
-      songContent.style.transform = `translateY(${-timelinePositionPx}px)`;
+    const plane = getScrollPlane();
+    if (plane) {
+      plane.style.transform = `translateY(${-timelinePositionPx}px)`;
     }
     // Keep native scroll neutral so transform is the single render path.
     if (teleprompter.scrollTop !== 0) {
@@ -243,6 +267,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.applyTeleprompterZoom = updateZoom;
+  window.reapplyTimelinePosition = function () {
+    setTimelinePosition(timelinePositionPx);
+  };
 
   // Save current zoom level for the displayed song
   function saveZoomLevelForCurrentSong() {

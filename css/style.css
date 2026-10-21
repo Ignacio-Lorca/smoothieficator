@@ -61,6 +61,8 @@ button:hover {
   z-index: 100;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   gap: 10px;
+  min-width: 0;
+  overflow: visible;
 }
 
 .logo-section {
@@ -121,6 +123,11 @@ button:hover {
   border-right: 1px solid #444;
   padding-right: 10px;
   height: 100%;
+  flex-shrink: 0;
+}
+
+.saved-songs-label-short {
+  display: none;
 }
 
 .song-nav-icon-button {
@@ -168,6 +175,7 @@ button:hover {
   right: 0;
   left: auto;
   min-width: 280px;
+  max-width: min(320px, calc(100vw - 16px));
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -191,8 +199,9 @@ button:hover {
   gap: 2px;
   font-size: 0.7rem;
   line-height: 1.25;
-  min-width: 140px;
+  min-width: 0;
   max-width: 200px;
+  flex-shrink: 1;
   padding: 0 6px;
   border-left: 1px solid #444;
   border-right: 1px solid #444;
@@ -250,6 +259,8 @@ button:hover {
   margin-left: auto;
   height: 100%;
   padding: 0 10px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .scroll-speed-container {
@@ -464,9 +475,8 @@ button:hover {
 /* Teleprompter Area */
 #teleprompter {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 2rem;
+  overflow: hidden;
+  padding: 0;
   background-color: #121212;
   margin-top: 56px;
   height: calc(100vh - 56px);
@@ -478,15 +488,77 @@ button:hover {
   height: 100vh;
 }
 
-#teleprompter.expanded #song-content {
-  padding-top: 20px;
-}
-
 #song-content {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0 2rem;
   font-size: 1.8rem;
   max-width: 90%;
   margin: 0 auto;
-  padding-bottom: 70vh; /* Extra padding at the bottom for scrolling */
+  min-width: 0;
+}
+
+#teleprompter.expanded #song-content {
+  padding-top: 0;
+}
+
+/* Fixed-size clip window; plane inside is as tall as the lyrics */
+.song-scroll-viewport {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.song-scroll-plane {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  will-change: transform;
+  padding-top: 0.5rem;
+  padding-bottom: 1.5rem;
+  box-sizing: border-box;
+}
+
+.song-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Space before the end marker so last lyrics can rise into view */
+.song-end-lead-in {
+  height: 45vh;
+  min-height: 8rem;
+  pointer-events: none;
+}
+
+.song-end-marker {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  color: #ffc107;
+  padding: 1.25rem 1rem;
+  margin: 0.5rem 0 0;
+  border-top: 2px solid #ffc107;
+  border-bottom: 2px solid #ffc107;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 193, 7, 0.12) 0%,
+    rgba(18, 18, 18, 0.95) 40%,
+    rgba(18, 18, 18, 0.95) 100%
+  );
+  text-transform: uppercase;
+  user-select: none;
 }
 
 /* Song content styling */
@@ -502,6 +574,7 @@ button:hover {
   gap: 0.2em;
   vertical-align: bottom;
   margin-right: 0.15em;
+  max-width: 100%;
 }
 
 .chord-diagram {
@@ -519,8 +592,20 @@ button:hover {
   display: block;
 }
 
-.chord-line {
+.lyric-line {
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.chord-line {
+  /* Wrap at spaces between chords once the line is width-constrained */
+  white-space: pre-wrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  line-height: 1.35;
 }
 
 .chord-diagram-toggle {
@@ -833,10 +918,17 @@ kbd {
   gap: 10px;
 }
 
-/* Song Header Styling */
+/* Song Header Styling — pinned above scrolling lyrics plane */
 .song-header {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+  padding: 0.75rem 1rem 0.85rem;
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  background-color: #121212;
+  border-bottom: 1px solid #333;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
 .song-header h2 {
@@ -1524,6 +1616,76 @@ kbd {
   margin: 0 2px;
 }
 
+/* Mid-width desktop: keep top bar on-screen */
+@media (max-width: 1200px) {
+  .sync-status-label {
+    display: none;
+  }
+
+  .sync-status-panel {
+    max-width: 120px;
+    min-width: 90px;
+  }
+
+  .zoom-container input[type="range"],
+  .scroll-speed-container input[type="range"] {
+    width: 56px;
+  }
+
+  .teleprompter-controls {
+    gap: 6px;
+    padding: 0 4px;
+  }
+
+  .logo-section {
+    padding-right: 8px;
+  }
+
+  .logo-section h1 {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 1000px) {
+  .zoom-container label,
+  .scroll-speed-container label {
+    display: none;
+  }
+
+  #saved-songs-button {
+    font-size: 0.8rem;
+    padding: 0 8px;
+  }
+
+  #saved-songs-button::after {
+    content: none;
+  }
+
+  .song-nav-cluster {
+    padding-right: 6px;
+  }
+
+  .sync-status-panel {
+    max-width: 100px;
+    font-size: 0.62rem;
+  }
+
+  .dropdown-button {
+    padding: 0 8px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 1000px) and (min-width: 769px) {
+  .saved-songs-label-full {
+    display: none;
+  }
+
+  .saved-songs-label-short {
+    display: inline;
+  }
+}
+
 /* Media queries for responsive design */
 @media (max-width: 768px) {
   /* Hide desktop elements */
@@ -1544,13 +1706,15 @@ kbd {
   #teleprompter {
     margin-top: 50px;
     height: calc(100vh - 50px);
-    padding: 1rem;
+    padding: 0;
     padding-bottom: 70px; /* Space for mobile controls */
   }
 
   /* Adjust font size for mobile */
   #song-content {
     font-size: 1.2rem;
+    padding: 0 1rem;
+    max-width: 100%;
   }
 
   /* Make chords the same size as lyrics in mobile view */

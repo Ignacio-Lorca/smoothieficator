@@ -64,16 +64,17 @@
   }
 
   function setTransportControlStatus(state) {
+    // Scroll row = connection/control action; role text lives on Control row.
     if (state === "taking") {
       setTransportSyncStatus("Taking control…", "saving");
       return;
     }
     if (state === "acquired") {
-      setTransportSyncStatus("You have control", "ok");
+      setTransportSyncStatus("Scroll sync live", "ok");
       return;
     }
     if (state === "following") {
-      setTransportSyncStatus("Following another device", "warning");
+      setTransportSyncStatus("Scroll sync live", "ok");
     }
   }
 
@@ -205,7 +206,7 @@
     } catch (error) {
       console.warn("Transport save failed.", error);
       if (error && error.statusCode === 409) {
-        setTransportSyncStatus("Following another device", "warning");
+        setTransportSyncStatus("Scroll sync live", "ok");
       } else {
         setTransportSyncStatus("Scroll sync lagging", "error");
       }
