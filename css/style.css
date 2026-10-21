@@ -562,6 +562,13 @@ button:hover {
   min-width: 0;
 }
 
+/* Welcome is taller than the viewport; allow scroll without affecting song timeline */
+#song-content:has(.welcome-message) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 2rem;
+}
+
 #teleprompter.expanded #song-content {
   padding-top: 0;
 }
@@ -959,13 +966,16 @@ kbd {
 /* Welcome Message Styling */
 .welcome-message {
   max-width: 600px;
-  margin: 60px auto 0;
+  width: 100%;
+  margin: 1.5rem auto 2rem;
   padding: 30px;
   background-color: #2a2a2a;
   border-radius: 8px;
   text-align: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   border: 1px solid #444;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .welcome-message h2 {
@@ -990,6 +1000,65 @@ kbd {
 .welcome-message ul li {
   margin-bottom: 10px;
   font-size: 1rem;
+}
+
+.welcome-play-rows {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #444;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.welcome-play-heading {
+  margin: 0 0 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffc107;
+}
+
+.welcome-play-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.welcome-play-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1f1f1f;
+  color: #eee;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-play-item:hover {
+  border-color: #ffc107;
+  background: #2a2a2a;
+}
+
+.welcome-play-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-play-item-meta {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #999;
 }
 
 /* Import/Export Styling */

@@ -85,6 +85,81 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await refreshSongsFromStorage();
 
+  function getUniqueSongsByPlayCount() {
+    const unique = [];
+    const seen = new Set();
+    Object.entries(localSongs).forEach(([id, song]) => {
+      const key = `${song.title}-${song.artist}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      unique.push({ ...song, __songId: id, playCount: song.playCount || 0 });
+    });
+    return unique;
+  }
+
+  function createWelcomePlayButton(song) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "welcome-play-item";
+    button.title = `${song.title} — ${song.artist}`;
+
+    const title = document.createElement("span");
+    title.className = "welcome-play-item-title";
+    title.textContent = `${song.title} · ${song.artist}`;
+
+    const meta = document.createElement("span");
+    meta.className = "welcome-play-item-meta";
+    const count = song.playCount || 0;
+    meta.textContent = `${count}×`;
+
+    button.appendChild(title);
+    button.appendChild(meta);
+    button.addEventListener("click", () => {
+      displaySong({ ...song });
+    });
+    return button;
+  }
+
+  function fillWelcomePlayList(container, songs) {
+    if (!container) return;
+    container.replaceChildren();
+    songs.forEach((song) => {
+      container.appendChild(createWelcomePlayButton(song));
+    });
+  }
+
+  function renderWelcomePlayHighlights() {
+    const rows = document.getElementById("welcome-play-rows");
+    if (!rows) return;
+
+    const unique = getUniqueSongsByPlayCount();
+    if (unique.length === 0) {
+      rows.hidden = true;
+      return;
+    }
+
+    const mostPlayed = [...unique]
+      .sort((a, b) => b.playCount - a.playCount)
+      .slice(0, 3);
+    const leastPlayed = [...unique]
+      .sort((a, b) => a.playCount - b.playCount)
+      .slice(0, 3);
+
+    fillWelcomePlayList(
+      rows.querySelector('[data-welcome-list="most"]'),
+      mostPlayed
+    );
+    fillWelcomePlayList(
+      rows.querySelector('[data-welcome-list="least"]'),
+      leastPlayed
+    );
+    rows.hidden = false;
+  }
+
+  window.renderWelcomePlayHighlights = renderWelcomePlayHighlights;
+  document.addEventListener("welcomeShown", renderWelcomePlayHighlights);
+  renderWelcomePlayHighlights();
+
   // Listen for the manual extraction event
   document.addEventListener("songExtracted", (event) => {
     if (event.detail) {
@@ -1702,4 +1777,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Initialize saved songs UI from remote/local storage.
   updateSavedSongsDropdown();
+  renderWelcomePlayHighlights();
 });

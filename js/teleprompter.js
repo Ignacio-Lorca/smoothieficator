@@ -796,6 +796,16 @@ document.addEventListener("DOMContentLoaded", () => {
               <li>Manually enter song title, artist, and lyrics with chords</li>
             </ul>
             <p>Use keyboard shortcuts (<kbd>K</kbd>) for quick navigation</p>
+            <div class="welcome-play-rows" id="welcome-play-rows" hidden>
+              <section class="welcome-play-row">
+                <h3 class="welcome-play-heading">Most played</h3>
+                <div class="welcome-play-list" data-welcome-list="most"></div>
+              </section>
+              <section class="welcome-play-row">
+                <h3 class="welcome-play-heading">Least played</h3>
+                <div class="welcome-play-list" data-welcome-list="least"></div>
+              </section>
+            </div>
           </div>`;
 
     window.currentDisplayedSong = null;
