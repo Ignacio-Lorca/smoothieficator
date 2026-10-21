@@ -714,6 +714,90 @@ document.addEventListener("DOMContentLoaded", () => {
   // Make goToNextSong available globally for the navigation buttons
   window.goToNextSong = goToNextSong;
 
+  function goToInitialScreen() {
+    if (isEditMode) {
+      exitEditMode();
+    }
+    stopScrolling();
+
+    if (typeof window.closeFullscreenSavedSongs === "function") {
+      window.closeFullscreenSavedSongs();
+    }
+
+    document
+      .querySelectorAll(".dropdown-content:not(.hidden)")
+      .forEach((dropdown) => dropdown.classList.add("hidden"));
+
+    const shortcutsPopup = document.getElementById("shortcuts-popup");
+    if (shortcutsPopup) {
+      shortcutsPopup.classList.add("hidden");
+    }
+
+    const mobileMenu = document.getElementById("mobile-menu");
+    if (mobileMenu) {
+      mobileMenu.classList.remove("active");
+    }
+
+    songContent.innerHTML = `
+          <div class="welcome-message">
+            <h2>Welcome to Smoothieficator</h2>
+            <p>To get started, click "Add Song" and either:</p>
+            <ul>
+              <li>
+                Copy-paste content from any chord/lyric site or document
+                (print-friendly view recommended)
+              </li>
+              <li>Manually enter song title, artist, and lyrics with chords</li>
+            </ul>
+            <p>Use keyboard shortcuts (<kbd>K</kbd>) for quick navigation</p>
+          </div>`;
+
+    window.currentDisplayedSong = null;
+    window.currentDisplayedSongId = null;
+    currentSongIndex = -1;
+
+    const chip = document.getElementById("current-song-chip");
+    if (chip) {
+      chip.classList.add("hidden");
+      const titleEl = chip.querySelector(".current-song-title");
+      const artistEl = chip.querySelector(".current-song-artist");
+      if (titleEl) titleEl.textContent = "No song";
+      if (artistEl) artistEl.textContent = "";
+      chip.title = "";
+    }
+
+    const miniControls = document.getElementById("mini-controls");
+    if (miniControls) {
+      miniControls.classList.remove("visible");
+    }
+
+    const mobileTeleprompterControls = document.getElementById(
+      "mobile-teleprompter-controls"
+    );
+    if (mobileTeleprompterControls) {
+      mobileTeleprompterControls.classList.add("hidden");
+    }
+
+    setTimelinePosition(0);
+    updateZoom();
+    window.dispatchEvent(new CustomEvent("welcomeShown"));
+  }
+
+  window.goToInitialScreen = goToInitialScreen;
+
+  function bindLogoHomeButtons() {
+    ["logo-home-button", "mobile-logo-home"].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        goToInitialScreen();
+      });
+    });
+  }
+
+  bindLogoHomeButtons();
+
   // Helper function to get unique songs by title and artist
   function getUniqueSongs(songs) {
     const uniqueSongs = [];

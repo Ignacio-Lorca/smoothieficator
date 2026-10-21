@@ -73,11 +73,29 @@ button:hover {
   height: 100%;
 }
 
-.logo-section h1 {
+.logo-section h1,
+.logo-home-button {
   font-size: 1rem;
+  font-weight: bold;
+  font-family: inherit;
   color: #ffc107;
   margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   white-space: nowrap;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.logo-home-button:hover {
+  color: #ffd54f;
+}
+
+.logo-home-button:focus-visible {
+  outline: 2px solid #ffc107;
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 /* Dropdown Menus */
@@ -1171,11 +1189,18 @@ kbd {
 
 .mobile-logo {
   margin: 0;
+  padding: 0;
+  padding-right: 40px; /* Balance the hamburger button space */
+  border: none;
+  background: transparent;
   font-size: 1.2rem;
+  font-weight: bold;
+  font-family: inherit;
   color: #ffc107;
   flex: 1;
   text-align: center;
-  padding-right: 40px; /* Balance the hamburger button space */
+  cursor: pointer;
+  line-height: 1.2;
 }
 
 /* Mobile Menu */
@@ -1726,7 +1751,8 @@ kbd {
     padding-right: 8px;
   }
 
-  .logo-section h1 {
+  .logo-section h1,
+  .logo-section .logo-home-button {
     font-size: 0.9rem;
   }
 
