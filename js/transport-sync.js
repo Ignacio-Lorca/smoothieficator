@@ -51,14 +51,56 @@
     return (state.positionPx || 0) + elapsed * speedPxPerMs(state.speed || 8);
   }
 
+  function shortClientId(id) {
+    const value = String(id || "");
+    if (!value) return "--------";
+    return value.slice(-8);
+  }
+
+  function updateReleaseControlButton() {
+    const button = document.getElementById("release-control-button");
+    if (!button) return;
+    button.disabled = !isConductor;
+  }
+
   function updateTransportRoleStatus() {
     const statusElement = document.getElementById("transport-role-status");
     if (!statusElement) return;
     statusElement.classList.remove("hidden");
-    statusElement.textContent = isConductor
-      ? "You are conducting"
-      : "Following another device";
-    statusElement.dataset.state = isConductor ? "ok" : "warning";
+    if (isConductor) {
+      statusElement.textContent = `Conducting · ${shortClientId(clientSourceId)}`;
+      statusElement.dataset.state = "ok";
+    } else {
+      const remoteId = transportState.conductorId || "";
+      statusElement.textContent = remoteId
+        ? `Following · ${shortClientId(remoteId)}`
+        : "Following · --------";
+      statusElement.dataset.state = "warning";
+    }
+    updateReleaseControlButton();
+  }
+
+  async function releaseControl() {
+    if (!isConductor || !window.songStorage) return false;
+    try {
+      await window.songStorage.saveTransportState({
+        ...transportState,
+        sourceId: clientSourceId,
+        releaseLease: true,
+        leaseMs: LEASE_MS,
+      });
+      isConductor = false;
+      transportState = {
+        ...transportState,
+        conductorId: "",
+        sourceId: clientSourceId,
+      };
+      updateTransportRoleStatus();
+      return true;
+    } catch (error) {
+      console.warn("Release control failed", error);
+      return false;
+    }
   }
 
   function updateTransportHealthStatus(remote) {
@@ -375,6 +417,14 @@
     pollTransportState().catch((error) => {
       console.warn("Initial transport fetch failed", error);
     });
+    const releaseButton = document.getElementById("release-control-button");
+    if (releaseButton) {
+      releaseButton.addEventListener("click", () => {
+        releaseControl().catch((error) => {
+          console.warn("Release control failed", error);
+        });
+      });
+    }
     window.addEventListener("beforeunload", () => {
       if (!isConductor || !window.songStorage) return;
       window.songStorage.saveTransportState({
@@ -391,6 +441,7 @@
     tick,
     attemptTakeover: attemptTakeoverAndPublish,
     publish: publishTransportState,
+    releaseControl,
     attachGestureListeners,
     getIsConductor: () => isConductor,
     setSuppressPublish: (value) => {

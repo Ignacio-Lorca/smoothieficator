@@ -123,11 +123,53 @@ button:hover {
   border-right: 1px solid #444;
   padding-right: 10px;
   height: 100%;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .saved-songs-label-short {
   display: none;
+}
+
+.current-song-chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  max-width: 220px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-left: 1px solid #444;
+  line-height: 1.15;
+  color: #ddd;
+  font-size: 0.8rem;
+}
+
+.current-song-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffc107;
+  font-weight: bold;
+}
+
+.current-song-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #9aa0a6;
+  font-size: 0.72rem;
+}
+
+#release-control-button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}
+
+#release-control-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .song-nav-icon-button {
@@ -542,6 +584,11 @@ button:hover {
 }
 
 .song-end-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
   text-align: center;
   font-size: 1.4rem;
   font-weight: bold;
@@ -549,8 +596,10 @@ button:hover {
   color: #ffc107;
   padding: 1.25rem 1rem;
   margin: 0.5rem 0 0;
+  border: none;
   border-top: 2px solid #ffc107;
   border-bottom: 2px solid #ffc107;
+  border-radius: 0;
   background: linear-gradient(
     180deg,
     rgba(255, 193, 7, 0.12) 0%,
@@ -559,6 +608,42 @@ button:hover {
   );
   text-transform: uppercase;
   user-select: none;
+  cursor: pointer;
+}
+
+.song-end-marker:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 193, 7, 0.22) 0%,
+    rgba(30, 30, 30, 0.98) 40%,
+    rgba(30, 30, 30, 0.98) 100%
+  );
+}
+
+.song-end-hint {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  font-weight: normal;
+  color: #ccc;
+  text-transform: none;
+}
+
+.chord-diagram-missing {
+  display: inline-block;
+  width: 0.55em;
+  text-align: center;
+  color: #666;
+  font-size: 0.7em;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .chord-diagram,
+  .chord-diagram-missing {
+    display: none !important;
+  }
 }
 
 /* Song content styling */
@@ -1616,7 +1701,7 @@ kbd {
   margin: 0 2px;
 }
 
-/* Mid-width desktop: keep top bar on-screen */
+/* Mid-width desktop: keep top bar on-screen + scale teleprompter */
 @media (max-width: 1200px) {
   .sync-status-label {
     display: none;
@@ -1643,6 +1728,19 @@ kbd {
 
   .logo-section h1 {
     font-size: 0.9rem;
+  }
+
+  #song-content {
+    font-size: 1.5rem;
+  }
+
+  .chord {
+    font-size: 1.55rem;
+  }
+
+  .chord-diagram {
+    width: 1.4em;
+    height: 1.65em;
   }
 }
 
@@ -1673,6 +1771,28 @@ kbd {
   .dropdown-button {
     padding: 0 8px;
     font-size: 0.8rem;
+  }
+
+  #song-content {
+    font-size: 1.35rem;
+  }
+
+  .chord {
+    font-size: 1.4rem;
+  }
+
+  .chord-diagram {
+    width: 1.3em;
+    height: 1.5em;
+  }
+
+  .current-song-chip {
+    max-width: 140px;
+    font-size: 0.75rem;
+  }
+
+  .current-song-artist {
+    display: none;
   }
 }
 

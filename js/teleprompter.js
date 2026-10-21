@@ -368,14 +368,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const songHeader = document.querySelector(".song-header");
     if (!songHeader || isEditMode) return;
 
+    // Store current content and create edit area
+    const songBody = document.querySelector(".song-body");
+    if (!songBody) return;
+
     isEditMode = true;
 
     // Stop scrolling if active
     stopScrolling();
 
-    // Store current content and create edit area
-    const songBody = document.querySelector(".song-body");
-    if (!songBody) return;
+    // Hide end marker / lead-in while editing; full re-render restores them
+    document
+      .querySelectorAll(".song-end-lead-in, .song-end-marker")
+      .forEach((el) => {
+        el.style.display = "none";
+      });
 
     // Get song title and artist for later use in saving
     const songTitle = document.querySelector(".song-header h2")?.textContent;
@@ -548,7 +555,6 @@ document.addEventListener("DOMContentLoaded", () => {
           content: editedContent,
         });
 
-        console.log("Song successfully saved with edited content");
       } else {
         console.error("Could not find song in local storage");
       }
@@ -617,9 +623,6 @@ document.addEventListener("DOMContentLoaded", () => {
       currentSongIndex = savedSongs.findIndex(
         (song) => song.title === currentTitle && song.artist === currentArtist
       );
-      console.log(
-        `Current song index: ${currentSongIndex} (${currentTitle} - ${currentArtist})`
-      );
     }
 
     return savedSongs;
@@ -630,18 +633,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // Don't allow navigation in edit mode
     if (isEditMode) return;
 
-    console.log("Attempting to go to previous song");
     const songs = loadSavedSongs();
-    console.log(`Found ${songs.length} total songs`);
 
     if (songs.length === 0) {
-      console.log("No songs found, exiting");
       return; // No songs saved
     }
 
     // Find unique songs (by title and artist)
     const uniqueSongs = getUniqueSongs(songs);
-    console.log(`Found ${uniqueSongs.length} unique songs`);
 
     if (uniqueSongs.length === 0) return;
 
@@ -651,23 +650,18 @@ document.addEventListener("DOMContentLoaded", () => {
       .querySelector(".song-header h3")
       ?.textContent?.replace(/by\s+/i, "")
       .trim();
-    console.log(`Current song: "${currentTitle}" by "${currentArtist}"`);
 
     let uniqueIndex = uniqueSongs.findIndex(
       (song) => song.title === currentTitle && song.artist === currentArtist
     );
-    console.log(`Current song index: ${uniqueIndex}`);
 
     if (uniqueIndex <= 0) {
       uniqueIndex = uniqueSongs.length - 1; // Wrap around to the last song
-      console.log(`Wrapping to last song: ${uniqueIndex}`);
     } else {
       uniqueIndex--;
-      console.log(`Moving to previous song: ${uniqueIndex}`);
     }
 
     const prevSong = uniqueSongs[uniqueIndex];
-    console.log(`Will display: "${prevSong.title}" by "${prevSong.artist}"`);
 
     // Set navigation flag to prevent duplicate saves
     window.navigationInProgress = true;
@@ -815,11 +809,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (document.querySelector(".fullscreen-songs-view")) {
       return;
     }
-
-    // Debug keyboard events
-    console.log(
-      `Key pressed: ${e.key}, keyCode: ${e.keyCode}, which: ${e.which}`
-    );
 
     switch (e.key) {
       case " ": // Spacebar

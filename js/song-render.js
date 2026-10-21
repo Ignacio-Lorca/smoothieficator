@@ -138,10 +138,24 @@
     endLeadIn.setAttribute("aria-hidden", "true");
     scrollPlane.appendChild(endLeadIn);
 
-    const endMarker = document.createElement("div");
+    const endMarker = document.createElement("button");
+    endMarker.type = "button";
     endMarker.className = "song-end-marker";
-    endMarker.textContent = "SONG END";
-    endMarker.setAttribute("role", "status");
+    endMarker.setAttribute("aria-label", "Song end — go to next song");
+    endMarker.title = "Next song →";
+    const endLabel = document.createElement("span");
+    endLabel.className = "song-end-label";
+    endLabel.textContent = "SONG END";
+    const endHint = document.createElement("span");
+    endHint.className = "song-end-hint";
+    endHint.textContent = "Next song →";
+    endMarker.appendChild(endLabel);
+    endMarker.appendChild(endHint);
+    endMarker.addEventListener("click", () => {
+      if (typeof window.goToNextSong === "function") {
+        window.goToNextSong();
+      }
+    });
     scrollPlane.appendChild(endMarker);
 
     scrollViewport.appendChild(scrollPlane);

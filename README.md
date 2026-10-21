@@ -28,24 +28,30 @@ A free and open lyrics and chords teleprompter web application. Load songs from 
 - **Advanced Display Controls**:
   - Zoom functionality (50%-200%) with per-song zoom memory
   - Fullscreen mode for distraction-free viewing during performances
+  - Mid-width font scaling for laptop / tablet landscape viewports
+- **Tools menu** (hamburger): Add Song, Import/Export, **Show Chords**, **Release control**
+- **Show Chords**: Optional guitar fingering diagrams next to chord names (desktop); on narrow screens (≤768px) diagrams are forced off for density
+- **Current song chip**: Truncated title (and artist when space allows) in the top bar
+- **SONG END**: Visible end marker; scroll stops with it in view; click advances to the next song (no auto-advance)
 - **In-Song Editing**: Edit song content directly in the teleprompter view
 - **Fullscreen Song Browser**: Navigate your entire song library in a dedicated fullscreen view
 - **Responsive Design**: Works on multiple devices/screen sizes with touch-optimized mobile interface
 - **Shared library (hosted)**: Songs stored via `api/songs.php` and JSON on the server
 - **Multi-device sync (hosted)**: Play/pause, speed, scroll position, and selected song synced via `api/transport.php` (polling, cPanel-friendly)
-- **Conductor / follower**: Any device can take control; others follow with smooth timeline interpolation
+- **Conductor / follower**: Any device can take control; others follow with smooth timeline interpolation; short conductor id shown on the Control row
 - **Offline fallback**: If the server is unreachable, the app uses the browser's local cache
 
 ## How to Use
 
-1. Extract songs using one of the following methods:
+1. Open the **Tools** menu (☰) for Add Song, Import/Export, Show Chords, and Release control.
+2. Extract songs using one of the following methods:
    - **Copy-Paste**: Use a print-friendly view or plain text from any chord/lyric source for best results
    - **Manual Entry**: Enter song title, artist, and paste or type lyrics with chords
-2. Adjust scroll speed and zoom level using the controls in the top bar (settings are remembered per song)
-3. Use playback controls to start/stop scrolling or reset to the top
-4. Navigate between saved songs using the navigation buttons or keyboard shortcuts
-5. Use edit mode (E key) to modify songs directly in the teleprompter view
-6. Access your full song library with the fullscreen song browser (S key)
+3. Adjust scroll speed and zoom level using the controls in the top bar (settings are remembered per song)
+4. Use playback controls to start/stop scrolling or reset to the top
+5. Navigate between saved songs using the navigation buttons, keyboard arrows, or click **SONG END →**
+6. Use edit mode (E key) to modify songs directly in the teleprompter view
+7. Access your full song library with the fullscreen song browser (S key)
 
 For multi-device rehearsal, see [Rehearsal / multi-device sync](#rehearsal--multi-device-sync) below.
 
@@ -97,13 +103,20 @@ For multi-device rehearsal, see [Rehearsal / multi-device sync](#rehearsal--mult
 2. Use one shared song library: add songs on one device or import JSON once so all clients load from the server.
 3. Each song has a stable `syncId` so the same song is selected on every client when the conductor changes songs.
 4. **Control**: Play, pause, speed, seek (keyboard, wheel, or touch), or selecting a song attempts to take control; other clients follow.
-5. **Status indicators** (top bar):
-   - **Synced** / **Sync: Live** — song library or transport connected
-   - **Offline: using local cache** — server songs unavailable; local cache only
-   - **Role: Conductor** / **Role: Follower** — who is driving transport
-   - **Sync: Taking control…** / **Control acquired** / **Following controller** — takeover state
-   - **Sync: Degraded** — transport updates are stale
-6. Sync uses **HTTP polling** (not WebSockets), suitable for shared cPanel hosting.
+5. **Status rows** (top bar):
+   - **Songs** — library sync (`Synced` / offline cache / errors)
+   - **Scroll** — transport connection health (`Live`, reconnecting, degraded)
+   - **Control** — role with short id, e.g. `Conducting · abc12345` or `Following · abc12345`
+6. **Release control** (Tools menu): enabled only while you are conductor; frees the lease so another device can take over cleanly (also released on tab close).
+7. Sync uses **HTTP polling** (not WebSockets), suitable for shared cPanel hosting.
+
+## Development smoke check
+
+Chord normalize/lookup (including minor vs major shapes such as `Bm`):
+
+```bash
+node scripts/chord-lookup-smoke.js
+```
 
 ## Privacy Note
 

@@ -226,6 +226,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.currentDisplayedSongId = match ? match[1].syncId || match[0] : null;
     }
 
+    updateCurrentSongChip(song);
+
     // Dispatch event that song has loaded
     window.dispatchEvent(new CustomEvent("songLoaded"));
 
@@ -234,6 +236,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (miniControls) {
       miniControls.classList.add("visible");
     }
+  }
+
+  function truncateLabel(text, maxLength) {
+    const value = String(text || "").trim();
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+  }
+
+  function updateCurrentSongChip(song) {
+    const chip = document.getElementById("current-song-chip");
+    if (!chip) return;
+    const titleEl = chip.querySelector(".current-song-title");
+    const artistEl = chip.querySelector(".current-song-artist");
+    if (!song || !song.title) {
+      chip.classList.add("hidden");
+      if (titleEl) titleEl.textContent = "No song";
+      if (artistEl) artistEl.textContent = "";
+      chip.title = "";
+      return;
+    }
+    const title = String(song.title || "").trim();
+    const artist = String(song.artist || "").trim();
+    if (titleEl) titleEl.textContent = truncateLabel(title, 28);
+    if (artistEl) {
+      artistEl.textContent = artist ? truncateLabel(artist, 28) : "";
+    }
+    chip.title = artist ? `${title} — ${artist}` : title;
+    chip.classList.remove("hidden");
   }
 
   // Helper function to check if song already exists in storage

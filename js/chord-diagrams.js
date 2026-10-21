@@ -18,10 +18,15 @@
     Bm: { frets: ["x", "2", "4", "4", "3", "2"], baseFret: 1 },
     B7: { frets: ["x", "2", "1", "2", "0", "2"], baseFret: 1 },
     Bm7: { frets: ["x", "2", "0", "2", "0", "2"], baseFret: 1 },
+    Bsus2: { frets: ["x", "2", "4", "4", "2", "2"], baseFret: 1 },
+    Bsus4: { frets: ["x", "2", "4", "4", "5", "2"], baseFret: 1 },
+    Bmaj7: { frets: ["x", "2", "4", "3", "4", "2"], baseFret: 1 },
     Bb: { frets: ["x", "1", "3", "3", "3", "1"], baseFret: 1 },
     Bbm: { frets: ["x", "1", "3", "3", "2", "1"], baseFret: 1 },
     Bb7: { frets: ["x", "1", "3", "1", "3", "1"], baseFret: 1 },
     Bbm7: { frets: ["x", "1", "3", "1", "2", "1"], baseFret: 1 },
+    Bbmaj7: { frets: ["x", "1", "3", "2", "3", "1"], baseFret: 1 },
+    Bbsus4: { frets: ["x", "1", "3", "3", "4", "1"], baseFret: 1 },
     C: { frets: ["x", "3", "2", "0", "1", "0"], baseFret: 1 },
     Cm: { frets: ["x", "3", "5", "5", "4", "3"], baseFret: 1 },
     C7: { frets: ["x", "3", "2", "3", "1", "0"], baseFret: 1 },
@@ -30,6 +35,7 @@
     Csus4: { frets: ["x", "3", "3", "0", "1", "0"], baseFret: 1 },
     Csus2: { frets: ["x", "3", "0", "0", "1", "0"], baseFret: 1 },
     Cadd9: { frets: ["x", "3", "2", "0", "3", "0"], baseFret: 1 },
+    C9: { frets: ["x", "3", "2", "3", "3", "3"], baseFret: 1 },
     Cdim: { frets: ["x", "3", "4", "5", "4", "3"], baseFret: 1 },
     D: { frets: ["x", "x", "0", "2", "3", "2"], baseFret: 1 },
     Dm: { frets: ["x", "x", "0", "2", "3", "1"], baseFret: 1 },
@@ -46,7 +52,12 @@
     Em7: { frets: ["0", "2", "0", "0", "0", "0"], baseFret: 1 },
     Emaj7: { frets: ["0", "2", "1", "1", "0", "0"], baseFret: 1 },
     Esus4: { frets: ["0", "2", "2", "2", "0", "0"], baseFret: 1 },
+    Esus2: { frets: ["0", "2", "2", "0", "0", "0"], baseFret: 1 },
+    E9: { frets: ["0", "2", "0", "1", "0", "2"], baseFret: 1 },
     Edim: { frets: ["0", "1", "2", "0", "2", "0"], baseFret: 1 },
+    A9: { frets: ["x", "0", "2", "4", "2", "3"], baseFret: 1 },
+    D9: { frets: ["x", "x", "0", "2", "1", "0"], baseFret: 1 },
+    G9: { frets: ["3", "2", "0", "2", "0", "1"], baseFret: 1 },
     F: { frets: ["1", "3", "3", "2", "1", "1"], baseFret: 1 },
     Fm: { frets: ["1", "3", "3", "1", "1", "1"], baseFret: 1 },
     F7: { frets: ["1", "3", "1", "2", "1", "1"], baseFret: 1 },
@@ -67,22 +78,35 @@
     "F#m": { frets: ["2", "4", "4", "2", "2", "2"], baseFret: 1 },
     "F#7": { frets: ["2", "4", "2", "3", "2", "2"], baseFret: 1 },
     "F#m7": { frets: ["2", "4", "2", "2", "2", "2"], baseFret: 1 },
+    "F#maj7": { frets: ["2", "4", "3", "3", "2", "2"], baseFret: 1 },
+    "F#sus4": { frets: ["2", "4", "4", "4", "2", "2"], baseFret: 1 },
     "C#": { frets: ["x", "4", "6", "6", "6", "4"], baseFret: 1 },
     "C#m": { frets: ["x", "4", "6", "6", "5", "4"], baseFret: 1 },
+    "C#7": { frets: ["x", "4", "6", "4", "6", "4"], baseFret: 1 },
+    "C#m7": { frets: ["x", "4", "6", "4", "5", "4"], baseFret: 1 },
+    "C#maj7": { frets: ["x", "4", "6", "5", "6", "4"], baseFret: 1 },
     "D#": { frets: ["x", "6", "8", "8", "8", "6"], baseFret: 1 },
     "D#m": { frets: ["x", "6", "8", "8", "7", "6"], baseFret: 1 },
+    "D#7": { frets: ["x", "6", "8", "6", "8", "6"], baseFret: 1 },
+    "D#m7": { frets: ["x", "6", "8", "6", "7", "6"], baseFret: 1 },
     "G#": { frets: ["4", "6", "6", "5", "4", "4"], baseFret: 1 },
     "G#m": { frets: ["4", "6", "6", "4", "4", "4"], baseFret: 1 },
+    "G#7": { frets: ["4", "6", "4", "5", "4", "4"], baseFret: 1 },
+    "G#m7": { frets: ["4", "6", "4", "4", "4", "4"], baseFret: 1 },
     "A#": { frets: ["x", "1", "3", "3", "3", "1"], baseFret: 1 },
     "A#m": { frets: ["x", "1", "3", "3", "2", "1"], baseFret: 1 },
+    "A#7": { frets: ["x", "1", "3", "1", "3", "1"], baseFret: 1 },
     Db: { frets: ["x", "4", "6", "6", "6", "4"], baseFret: 1 },
     Dbm: { frets: ["x", "4", "6", "6", "5", "4"], baseFret: 1 },
+    Db7: { frets: ["x", "4", "6", "4", "6", "4"], baseFret: 1 },
     Eb: { frets: ["x", "6", "8", "8", "8", "6"], baseFret: 1 },
     Ebm: { frets: ["x", "6", "8", "8", "7", "6"], baseFret: 1 },
+    Eb7: { frets: ["x", "6", "8", "6", "8", "6"], baseFret: 1 },
     Gb: { frets: ["2", "4", "4", "3", "2", "2"], baseFret: 1 },
     Gbm: { frets: ["2", "4", "4", "2", "2", "2"], baseFret: 1 },
     Ab: { frets: ["4", "6", "6", "5", "4", "4"], baseFret: 1 },
     Abm: { frets: ["4", "6", "6", "4", "4", "4"], baseFret: 1 },
+    Ab7: { frets: ["4", "6", "4", "5", "4", "4"], baseFret: 1 },
   };
 
   const ENHARMONIC = {
@@ -335,9 +359,26 @@
     return svg;
   }
 
+  function isMobileCompact() {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 768px)").matches
+    );
+  }
+
+  function createMissingCue() {
+    const missing = document.createElement("span");
+    missing.className = "chord-diagram-missing";
+    missing.textContent = "·";
+    missing.title = "No diagram for this chord";
+    missing.setAttribute("aria-hidden", "true");
+    return missing;
+  }
+
   function createMiniDiagram(name) {
+    if (isMobileCompact()) return null;
     const shape = lookup(name);
-    if (!shape) return null;
+    if (!shape) return createMissingCue();
 
     const wrap = document.createElement("span");
     wrap.className = "chord-diagram";
@@ -347,6 +388,7 @@
   }
 
   function isEnabled() {
+    if (isMobileCompact()) return false;
     return enabled;
   }
 
@@ -393,6 +435,15 @@
       setEnabled(checkbox.checked);
       rerenderCurrentSong();
     });
+    if (typeof window.matchMedia === "function") {
+      const mq = window.matchMedia("(max-width: 768px)");
+      const onCompactChange = () => rerenderCurrentSong();
+      if (typeof mq.addEventListener === "function") {
+        mq.addEventListener("change", onCompactChange);
+      } else if (typeof mq.addListener === "function") {
+        mq.addListener(onCompactChange);
+      }
+    }
   }
 
   enabled = readStoredEnabled();
