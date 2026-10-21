@@ -676,20 +676,22 @@ document.addEventListener("DOMContentLoaded", () => {
     return savedSongs;
   }
 
+  function getNavigationSongList() {
+    if (typeof window.getSongsInSortOrder === "function") {
+      const sorted = window.getSongsInSortOrder();
+      if (Array.isArray(sorted) && sorted.length > 0) {
+        return sorted;
+      }
+    }
+    return getUniqueSongs(loadSavedSongs());
+  }
+
   // Navigate to previous song
   function goToPreviousSong() {
     // Don't allow navigation in edit mode
     if (isEditMode) return;
 
-    const songs = loadSavedSongs();
-
-    if (songs.length === 0) {
-      return; // No songs saved
-    }
-
-    // Find unique songs (by title and artist)
-    const uniqueSongs = getUniqueSongs(songs);
-
+    const uniqueSongs = getNavigationSongList();
     if (uniqueSongs.length === 0) return;
 
     // Find current song in unique list
@@ -727,11 +729,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Don't allow navigation in edit mode
     if (isEditMode) return;
 
-    const songs = loadSavedSongs();
-    if (songs.length === 0) return; // No songs saved
-
-    // Find unique songs (by title and artist)
-    const uniqueSongs = getUniqueSongs(songs);
+    const uniqueSongs = getNavigationSongList();
     if (uniqueSongs.length === 0) return;
 
     // Find current song in unique list

@@ -885,7 +885,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   let fullscreenSongsList = [];
   let allSongsData = []; // Store all songs for filtering
   let searchInput = null; // Store reference to search input
-  let currentSortMode = "newest"; // Default sort mode
+  const SORT_MODE_STORAGE_KEY = "songSortMode";
+  const SEARCH_FILTER_STORAGE_KEY = "songSearchFilter";
   const sortModes = [
     { id: "newest", label: "Newest First" },
     { id: "oldest", label: "Oldest First" },
@@ -897,6 +898,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     { id: "leastPlayed", label: "Least Played" },
     { id: "recentlyPlayed", label: "Recently Played" },
   ];
+
+  function readStoredSortMode() {
+    try {
+      const stored = localStorage.getItem(SORT_MODE_STORAGE_KEY);
+      if (stored && sortModes.some((mode) => mode.id === stored)) {
+        return stored;
+      }
+    } catch {
+      /* ignore */
+    }
+    return "newest";
+  }
+
+  function persistSortMode(mode) {
+    try {
+      localStorage.setItem(SORT_MODE_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function readStoredSearchFilter() {
+    try {
+      return localStorage.getItem(SEARCH_FILTER_STORAGE_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function persistSearchFilter(value) {
+    persistedSearchFilter = String(value || "");
+    try {
+      localStorage.setItem(SEARCH_FILTER_STORAGE_KEY, persistedSearchFilter);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let currentSortMode = readStoredSortMode();
+  let persistedSearchFilter = readStoredSearchFilter();
 
   // Function to sort songs based on current sort mode
   function sortSongs(songsArray, sortMode) {
@@ -997,6 +1038,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const currentIndex = sortModes.findIndex(mode => mode.id === currentSortMode);
     const nextIndex = (currentIndex + 1) % sortModes.length;
     currentSortMode = sortModes[nextIndex].id;
+    persistSortMode(currentSortMode);
     
     // Update the select element if it exists
     const sortSelect = document.getElementById("sort-mode-select");
@@ -1012,6 +1054,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const currentIndex = sortModes.findIndex(mode => mode.id === currentSortMode);
     const prevIndex = (currentIndex - 1 + sortModes.length) % sortModes.length;
     currentSortMode = sortModes[prevIndex].id;
+    persistSortMode(currentSortMode);
     
     // Update the select element if it exists
     const sortSelect = document.getElementById("sort-mode-select");
@@ -1020,6 +1063,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     applySortAndRender();
+  }
+
+  // Current song list for prev/next: sticky search filter + sticky sort
+  function getSongsInSortOrder() {
+    let entries = Object.entries(localSongs);
+    const searchTerm = persistedSearchFilter.toLowerCase().trim();
+    if (searchTerm) {
+      entries = entries.filter(([, song]) => {
+        const titleMatch = String(song.title || "")
+          .toLowerCase()
+          .includes(searchTerm);
+        const artistMatch = String(song.artist || "")
+          .toLowerCase()
+          .includes(searchTerm);
+        return titleMatch || artistMatch;
+      });
+    }
+    const sorted = sortSongs(entries, currentSortMode);
+    const uniqueSongs = [];
+    const seen = new Set();
+    for (const [id, song] of sorted) {
+      const key = `${song.title}-${song.artist}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniqueSongs.push({ ...song, __songId: id });
+    }
+    return uniqueSongs;
   }
 
   // Show fullscreen saved songs view
@@ -1048,10 +1118,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     searchInput.type = "text";
     searchInput.placeholder = "Search...";
     searchInput.classList.add("fullscreen-songs-search-input");
+    searchInput.value = persistedSearchFilter;
     searchInput.addEventListener("input", handleSearchInput);
     searchInput.addEventListener("keydown", handleSearchKeydown);
-    
+
+    const clearSearchButton = document.createElement("button");
+    clearSearchButton.type = "button";
+    clearSearchButton.classList.add("fullscreen-songs-clear-search");
+    clearSearchButton.textContent = "clear";
+    clearSearchButton.title = "Clear search";
+    clearSearchButton.addEventListener("click", () => {
+      if (!searchInput) return;
+      searchInput.value = "";
+      persistSearchFilter("");
+      handleSearchInput();
+      searchInput.focus();
+    });
+
     searchContainer.appendChild(searchInput);
+    searchContainer.appendChild(clearSearchButton);
 
     // Add sort selector
     const sortContainer = document.createElement("div");
@@ -1077,6 +1162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     sortSelect.addEventListener("change", (e) => {
       currentSortMode = e.target.value;
+      persistSortMode(currentSortMode);
       applySortAndRender();
     });
 
@@ -1109,11 +1195,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         "No songs saved yet. Add a song to get started!";
       content.appendChild(emptyMessage);
     } else {
-      // Store all songs data
+      // Store all songs data; apply sticky search + sort
       allSongsData = savedSongsEntries;
-      
-      // Apply sorting
-      fullscreenSongsList = sortSongs(savedSongsEntries, currentSortMode);
+      let songsToSort = allSongsData;
+      const searchTerm = persistedSearchFilter.toLowerCase().trim();
+      if (searchTerm) {
+        songsToSort = allSongsData.filter(([, song]) => {
+          const titleMatch = song.title.toLowerCase().includes(searchTerm);
+          const artistMatch = song.artist.toLowerCase().includes(searchTerm);
+          return titleMatch || artistMatch;
+        });
+      }
+      fullscreenSongsList = sortSongs(songsToSort, currentSortMode);
       selectedSongIndex = 0;
 
       const songsList = document.createElement("ul");
@@ -1305,6 +1398,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // If search has text, clear it; otherwise close the view
         if (isSearchFocused && searchInput.value) {
           searchInput.value = "";
+          persistSearchFilter("");
           handleSearchInput();
         } else {
           closeFullscreenSavedSongs();
@@ -1322,7 +1416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Handle search input changes
   function handleSearchInput() {
     if (!searchInput) return;
-    
+    persistSearchFilter(searchInput.value);
     // Use the new unified sort and render function
     applySortAndRender();
   }
@@ -1604,6 +1698,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Make fullscreen function globally available
   window.showFullscreenSavedSongs = showFullscreenSavedSongs;
   window.closeFullscreenSavedSongs = closeFullscreenSavedSongs;
+  window.getSongsInSortOrder = getSongsInSortOrder;
 
   // Initialize saved songs UI from remote/local storage.
   updateSavedSongsDropdown();

@@ -1539,10 +1539,15 @@ kbd {
 .fullscreen-songs-search {
   flex: 1;
   min-width: 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .fullscreen-songs-search-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   padding: 8px 12px;
   font-size: 0.9rem;
   background-color: #1a1a1a;
@@ -1550,6 +1555,22 @@ kbd {
   border-radius: 6px;
   color: #fff;
   transition: border-color 0.2s;
+}
+
+.fullscreen-songs-clear-search {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fullscreen-songs-clear-search:hover {
+  color: #ffc107;
 }
 
 .fullscreen-songs-search-input:focus {
