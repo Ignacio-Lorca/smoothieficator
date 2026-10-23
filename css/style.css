@@ -149,36 +149,6 @@ button:hover {
   display: none;
 }
 
-.current-song-chip {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  max-width: 220px;
-  margin-left: 6px;
-  padding: 0 8px;
-  border-left: 1px solid #444;
-  line-height: 1.15;
-  color: #ddd;
-  font-size: 0.8rem;
-}
-
-.current-song-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #ffc107;
-  font-weight: bold;
-}
-
-.current-song-artist {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #9aa0a6;
-  font-size: 0.72rem;
-}
-
 #release-control-button {
   display: block;
   width: 100%;
@@ -1090,7 +1060,8 @@ kbd {
   gap: 10px;
 }
 
-/* Song Header Styling — pinned above scrolling lyrics plane */
+/* Song Header Styling — pinned above scrolling lyrics plane.
+   Fixed rem size so teleprompter zoom on #song-content does not scale it. */
 .song-header {
   display: flex;
   flex-direction: row;
@@ -1110,13 +1081,15 @@ kbd {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
+  font-size: 1.8rem;
+  font-weight: normal;
 }
 
 .song-header h2 {
   color: #ffc107;
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: bold;
+  font-size: inherit;
+  font-weight: inherit;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1125,8 +1098,8 @@ kbd {
 
 .song-header h3 {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: normal;
+  font-size: inherit;
+  font-weight: inherit;
   opacity: 0.8;
   flex-shrink: 1;
   min-width: 0;
@@ -1924,14 +1897,6 @@ kbd {
     height: 1.5em;
   }
 
-  .current-song-chip {
-    max-width: 140px;
-    font-size: 0.75rem;
-  }
-
-  .current-song-artist {
-    display: none;
-  }
 }
 
 @media (max-width: 1000px) and (min-width: 769px) {

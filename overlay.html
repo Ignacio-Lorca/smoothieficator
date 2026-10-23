@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smoothieficator — Now Playing</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+
+      .marquee {
+        display: none;
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        overflow: hidden;
+        white-space: nowrap;
+        mask-image: linear-gradient(
+          90deg,
+          transparent 0,
+          #000 3%,
+          #000 97%,
+          transparent 100%
+        );
+        -webkit-mask-image: linear-gradient(
+          90deg,
+          transparent 0,
+          #000 3%,
+          #000 97%,
+          transparent 100%
+        );
+      }
+
+      .marquee.is-visible {
+        display: flex;
+      }
+
+      .marquee-track {
+        display: inline-flex;
+        align-items: center;
+        gap: 4rem;
+        will-change: transform;
+        animation: marquee-scroll var(--marquee-duration, 28s) linear infinite;
+      }
+
+      .marquee-track.is-restarting {
+        animation: none;
+      }
+
+      .marquee-text {
+        flex-shrink: 0;
+        font-size: clamp(1.75rem, 4.5vh, 3.25rem);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #ffc107;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+      }
+
+      .marquee-text .artist {
+        color: #fff;
+        font-weight: 500;
+        opacity: 0.92;
+      }
+
+      .marquee-gap {
+        flex-shrink: 0;
+        width: 4rem;
+        color: #ffc107;
+        opacity: 0.45;
+        font-size: clamp(1.25rem, 3.5vh, 2.25rem);
+      }
+
+      @keyframes marquee-scroll {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="marquee" id="marquee" aria-live="polite">
+      <div class="marquee-track" id="marquee-track">
+        <span class="marquee-text" data-copy="a"></span>
+        <span class="marquee-gap" aria-hidden="true">·</span>
+        <span class="marquee-text" data-copy="b"></span>
+        <span class="marquee-gap" aria-hidden="true">·</span>
+      </div>
+    </div>
+
+    <script>
+      window.SMOOTHIEFICATOR_STORAGE_ENDPOINT =
+        window.SMOOTHIEFICATOR_STORAGE_ENDPOINT ||
+        "https://smoothieficator.nachosavage.com/api/songs.php";
+      window.SMOOTHIEFICATOR_TRANSPORT_ENDPOINT =
+        window.SMOOTHIEFICATOR_TRANSPORT_ENDPOINT ||
+        "https://smoothieficator.nachosavage.com/api/transport.php";
+    </script>
+    <script>
+      (function () {
+        const STORAGE_ENDPOINT =
+          window.SMOOTHIEFICATOR_STORAGE_ENDPOINT || "/api/songs.php";
+        const TRANSPORT_ENDPOINT =
+          window.SMOOTHIEFICATOR_TRANSPORT_ENDPOINT || "/api/transport.php";
+        const TRANSPORT_POLL_MS = 1000;
+        const SONGS_POLL_MS = 20000;
+
+        const marquee = document.getElementById("marquee");
+        const track = document.getElementById("marquee-track");
+        const textNodes = track.querySelectorAll(".marquee-text");
+
+        let songBySyncId = new Map();
+        let currentSongId = "";
+        let currentLabel = "";
+        let songsLoadedAt = 0;
+
+        function normalizeSongsPayload(payload) {
+          if (!payload || typeof payload !== "object") return {};
+          if (payload.songs && typeof payload.songs === "object") {
+            return payload.songs;
+          }
+          return payload;
+        }
+
+        function rebuildSongIndex(songs) {
+          const map = new Map();
+          Object.entries(songs || {}).forEach(([id, song]) => {
+            if (!song || typeof song !== "object") return;
+            const syncId = song.syncId || id;
+            map.set(String(syncId), song);
+            map.set(String(id), song);
+          });
+          songBySyncId = map;
+        }
+
+        function formatLabel(song) {
+          if (!song) return "";
+          const title = String(song.title || "").trim();
+          const artist = String(song.artist || "").trim();
+          if (!title && !artist) return "";
+          if (!artist) return title;
+          if (!title) return artist;
+          return `${title} — ${artist}`;
+        }
+
+        function formatLabelHtml(song) {
+          if (!song) return "";
+          const title = String(song.title || "").trim();
+          const artist = String(song.artist || "").trim();
+          if (!title && !artist) return "";
+          if (!artist) {
+            return escapeHtml(title);
+          }
+          if (!title) {
+            return `<span class="artist">${escapeHtml(artist)}</span>`;
+          }
+          return `${escapeHtml(title)} — <span class="artist">${escapeHtml(
+            artist
+          )}</span>`;
+        }
+
+        function escapeHtml(text) {
+          return String(text)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        function restartMarquee() {
+          track.classList.add("is-restarting");
+          // Force reflow so animation restarts cleanly on song change
+          void track.offsetWidth;
+          track.classList.remove("is-restarting");
+        }
+
+        function setNowPlaying(songId, song) {
+          const label = formatLabel(song);
+          if (!songId || !label) {
+            currentSongId = "";
+            currentLabel = "";
+            marquee.classList.remove("is-visible");
+            textNodes.forEach((node) => {
+              node.textContent = "";
+            });
+            return;
+          }
+
+          const changed = songId !== currentSongId || label !== currentLabel;
+          currentSongId = songId;
+          currentLabel = label;
+
+          const html = formatLabelHtml(song);
+          textNodes.forEach((node) => {
+            node.innerHTML = html;
+          });
+          marquee.classList.add("is-visible");
+
+          if (changed) {
+            restartMarquee();
+          }
+        }
+
+        async function fetchJson(url) {
+          const response = await fetch(url, {
+            method: "GET",
+            cache: "no-store",
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} for ${url}`);
+          }
+          return response.json();
+        }
+
+        async function refreshSongs(force) {
+          const stale = Date.now() - songsLoadedAt > SONGS_POLL_MS;
+          if (!force && songBySyncId.size > 0 && !stale) return;
+          const payload = await fetchJson(STORAGE_ENDPOINT);
+          rebuildSongIndex(normalizeSongsPayload(payload));
+          songsLoadedAt = Date.now();
+        }
+
+        async function pollTransport() {
+          try {
+            const transport = await fetchJson(TRANSPORT_ENDPOINT);
+            const songId = String(transport.songId || "").trim();
+
+            if (!songId) {
+              setNowPlaying("", null);
+              return;
+            }
+
+            if (!songBySyncId.has(songId)) {
+              await refreshSongs(true);
+            } else {
+              await refreshSongs(false);
+            }
+
+            const song = songBySyncId.get(songId) || null;
+            setNowPlaying(songId, song);
+          } catch (error) {
+            console.warn("Overlay transport poll failed", error);
+          }
+        }
+
+        async function pollSongs() {
+          try {
+            await refreshSongs(true);
+            if (currentSongId) {
+              const song = songBySyncId.get(currentSongId) || null;
+              setNowPlaying(currentSongId, song);
+            }
+          } catch (error) {
+            console.warn("Overlay songs poll failed", error);
+          }
+        }
+
+        refreshSongs(true)
+          .catch((error) => console.warn("Initial songs load failed", error))
+          .finally(() => {
+            pollTransport();
+            setInterval(pollTransport, TRANSPORT_POLL_MS);
+            setInterval(pollSongs, SONGS_POLL_MS);
+          });
+      })();
+    </script>
+  </body>
+</html>

@@ -812,16 +812,6 @@ document.addEventListener("DOMContentLoaded", () => {
     window.currentDisplayedSongId = null;
     currentSongIndex = -1;
 
-    const chip = document.getElementById("current-song-chip");
-    if (chip) {
-      chip.classList.add("hidden");
-      const titleEl = chip.querySelector(".current-song-title");
-      const artistEl = chip.querySelector(".current-song-artist");
-      if (titleEl) titleEl.textContent = "No song";
-      if (artistEl) artistEl.textContent = "";
-      chip.title = "";
-    }
-
     const miniControls = document.getElementById("mini-controls");
     if (miniControls) {
       miniControls.classList.remove("visible");

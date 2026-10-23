@@ -31,7 +31,6 @@ A free and open lyrics and chords teleprompter web application. Load songs from 
   - Mid-width font scaling for laptop / tablet landscape viewports
 - **Tools menu** (hamburger): Add Song, Import/Export, **Show Chords**, **Release control**
 - **Show Chords**: Optional guitar fingering diagrams next to chord names (desktop); on narrow screens (≤768px) diagrams are forced off for density
-- **Current song chip**: Truncated title (and artist when space allows) in the top bar
 - **SONG END**: Visible end marker; scroll stops with it in view; click advances to the next song (no auto-advance)
 - **In-Song Editing**: Edit song content directly in the teleprompter view
 - **Fullscreen Song Browser**: Navigate your entire song library in a dedicated fullscreen view
@@ -109,6 +108,18 @@ For multi-device rehearsal, see [Rehearsal / multi-device sync](#rehearsal--mult
    - **Control** — role with short id, e.g. `Conducting · abc12345` or `Following · abc12345`
 6. **Release control** (Tools menu): enabled only while you are conductor; frees the lease so another device can take over cleanly (also released on tab close).
 7. Sync uses **HTTP polling** (not WebSockets), suitable for shared cPanel hosting.
+
+## OBS now-playing overlay
+
+Use [overlay.html](overlay.html) as an OBS **Browser Source** to show the current synced song as a horizontal scrolling `Title — Artist` ticker.
+
+1. Deploy the site (same host as the teleprompter APIs).
+2. In OBS: **Sources → Browser** → URL `https://your-domain.example/overlay.html` (or `https://smoothieficator.nachosavage.com/overlay.html`).
+3. Suggested size: width **1920**, height **80–120**.
+4. Leave **Shutdown source when not visible** unchecked so polling keeps running when the scene is inactive.
+5. The page uses a transparent background; it reads `songId` from transport and resolves title/artist from the shared song library.
+
+Endpoints default to the same `SMOOTHIEFICATOR_*` URLs as the main app (override in `overlay.html` if needed).
 
 ## Development smoke check
 
